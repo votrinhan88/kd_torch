@@ -81,9 +81,24 @@ class LeNet5(torch.nn.Module):
             x = self.pred(x)
         return x
 
+class LeNet5_ReLU_MaxPool(LeNet5):
+    def __init__(self,
+                 half_size:bool=False,
+                 input_dim:List[int]=[1, 32, 32],
+                 num_classes:int=10,
+                 return_logits:bool=False
+                 ):
+        super().__init__(half_size, input_dim, num_classes, return_logits)
+        # Replace Tanh with ReLU
+        self.A1 = nn.ReLU()
+        self.A3 = nn.ReLU()
+        self.A5 = nn.ReLU()
+        self.A6 = nn.ReLU()
+        # Replace AvgPool2d with MaxPool2d
+        self.S2 = nn.MaxPool2d(kernel_size=2, stride=2, padding=0)
+        self.S4 = nn.MaxPool2d(kernel_size=2, stride=2, padding=0)
+
 if __name__ == '__main__':
-    net = LeNet5()
-    
     inputs = torch.rand(size=[128, 1, 32, 32])
-    out = net(inputs)
-    print()
+    print(LeNet5()(inputs).shape)
+    print(LeNet5_ReLU_MaxPool()(inputs).shape)
