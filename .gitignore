@@ -129,4 +129,5 @@ dmypy.json
 .pyre/
 
 # Custom settings
+datasets/
 scrap.py
