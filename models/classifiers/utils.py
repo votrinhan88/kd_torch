@@ -1,5 +1,5 @@
 import copy
-from typing import Callable, Tuple, Optional, Dict
+from typing import Callable, Tuple, Optional, Dict, List, Any
 import torch
 from torch.utils.data import DataLoader
 import tqdm.auto as tqdm
@@ -10,76 +10,77 @@ if __name__ == '__main__':
     assert os.path.basename(repo_path) == 'kd_torch', "Wrong parent folder. Please change to 'kd_torch'"
     sys.path.append(repo_path)
 from metrics.Metrics import Metric, Mean, CategoricalAccuracy
+from callbacks.Callbacks import Callback, History, ProgressBar
 
 class Trainer:
     def __init__(self,
                  model:torch.nn.Module,
                  optimizer:torch.optim.Optimizer,
-                 loss_fn:Callable
+                 loss_fn:Callable[[Any], torch.Tensor],
                  ):
         self.model = model
         self.optimizer = optimizer
         self.loss_fn = loss_fn
-        
+        # Metrics
         self.train_metrics:Dict[str, Metric] = {'loss': Mean(), 'accuracy': CategoricalAccuracy()}
         self.val_metrics = copy.deepcopy(self.train_metrics)
+        # To be initialize by callback History
+        self.history:History
+        # To be initialize by callback ProgressBar
+        self.training_progress:tqdm = None
+        self.train_phase_progress:tqdm = None
+        self.val_phase_progress:tqdm = None
 
-        self.history = {
-            'loss': [],
-            'accuracy': [],
-            'val_loss': [],
-            'val_accuracy': [],
-        }
-
-    def fit(self,
+    def training_loop(self,
                       trainloader:DataLoader,
                       num_epochs:int,
-                      valloader:Optional[DataLoader],
+                      valloader:Optional[DataLoader]=None,
+                      callbacks:Optional[List[Callback]]=None,
                       ):
-        # on_train_begin
-        training_loop = tqdm.tqdm(range(num_epochs), desc='Fit', unit='epochs')
-        for epoch in training_loop:
-            # on_epoch_begin
+        self.training_loop_kwargs = {
+            'trainloader':trainloader,
+            'num_epochs':num_epochs,
+            'valloader':valloader,
+        }
+
+        self.hook_callbacks(callbacks=callbacks)
+        logs = {}
+        self.on_train_begin(logs)
+        
+        for epoch in self.training_progress:
+            epoch_logs = {}
+            self.on_epoch_begin(epoch_logs, logs)
             
             # Training phase
-            train_data = tqdm.tqdm(trainloader, desc='Train phase', leave=False, unit='batches')
-            for batch, data in enumerate(train_data):
-                # on_train_batch_begin
+            for batch, data in enumerate(self.train_phase_progress):
+                batch_logs = {}
+                self.on_train_batch_begin(batch, batch_logs)
                 self.train_batch(data)
-                # on_train_batch_end
-                train_data.set_postfix({
-                    'loss':f"{self.train_metrics['loss'].latest:.4g}",
-                    'accuracy':f"{self.train_metrics['accuracy'].latest:.4g}",
+                batch_logs.update({
+                    'loss':self.train_metrics['loss'].latest,
+                    'accuracy':self.train_metrics['accuracy'].latest,
                 })
-            postfix_training_loop = {
-                'loss':f"{self.train_metrics['loss'].latest:.4g}",
-                'accuracy':f"{self.train_metrics['accuracy'].latest:.4g}",
-            }
-            training_loop.set_postfix(postfix_training_loop)
+                self.on_train_batch_end(batch, batch_logs)
+            epoch_logs.update(batch_logs)
+            self.on_epoch_train_end(epoch, epoch_logs)
             
             # Validation phase
             if valloader is not None:
-                # on_test_begin
-                val_data = tqdm.tqdm(valloader, desc='Test phase', leave=False, unit='batches')
-                for batch, data in enumerate(val_data):
-                    # on_test_batch_begin
+                self.on_epoch_test_begin(epoch, epoch_logs)
+                for batch, data in enumerate(self.val_phase_progress):
+                    self.on_test_batch_begin(batch, batch_logs)
                     self.test_batch(data)
-                    # on_test_batch_end
-                    val_data.set_postfix({
-                        'loss':f"{self.val_metrics['loss'].latest:.4g}",
-                        'accuracy':f"{self.val_metrics['accuracy'].latest:.4g}",
-                    })
-                # on_test_end
-                postfix_training_loop.update({
-                    'val_loss':f"{self.val_metrics['loss'].latest:.4g}",
-                    'val_accuracy':f"{self.val_metrics['accuracy'].latest:.4g}",
-                })
-                training_loop.set_postfix(postfix_training_loop)
+                    batch_logs = {
+                        'loss':self.val_metrics['loss'].latest,
+                        'accuracy':self.val_metrics['accuracy'].latest,
+                    }
+                    self.on_test_batch_end(batch, batch_logs)
+                epoch_logs.update({f'val_{key}': value for key, value in batch_logs.items()})
+            self.on_epoch_end(epoch, epoch_logs)
+        
+        logs.update(epoch_logs)
+        self.on_train_end(logs)
 
-            # on_epoch_end
-            for metric in [*self.train_metrics.values(), *self.val_metrics.values()]:
-                metric.reset()
-        # on_train_end
         return self.history
 
     def train_batch(self, data:Tuple[torch.Tensor, torch.Tensor]):
@@ -102,5 +103,56 @@ class Trainer:
             # Forward
             prediction = self.model(input)
             loss = self.loss_fn(prediction, label)
+            # Metrics
             self.val_metrics['loss'].update(new_entry=loss)
             self.val_metrics['accuracy'].update(label=label, prediction=prediction)
+
+    def hook_callbacks(self, callbacks:List[Callback]):
+        self.callbacks:List[Callback] = [History(), ProgressBar()]
+        if callbacks is not None:
+            self.callbacks.extend(callbacks)
+        for cb in self.callbacks:
+            cb.hook(self)
+
+    def on_train_begin(self, logs=None):
+        for cb in self.callbacks:
+            cb.on_train_begin(logs)
+
+    def on_train_end(self, logs=None):
+        for cb in self.callbacks:
+            cb.on_train_end(logs)
+
+    def on_epoch_begin(self, epoch:int, logs=None):
+        for cb in self.callbacks:
+            cb.on_epoch_begin(epoch, logs)
+    
+    def on_epoch_train_end(self, epoch:int, logs=None):
+        for cb in self.callbacks:
+            cb.on_epoch_train_end(epoch, logs)
+    
+    def on_epoch_test_begin(self, epoch:int, logs=None):
+        for cb in self.callbacks:
+            cb.on_epoch_test_begin(epoch, logs)
+
+    def on_epoch_end(self, epoch:int, logs=None):
+        for cb in self.callbacks:
+            cb.on_epoch_end(epoch, logs)
+        # Reset metrics
+        for metric in [*self.train_metrics.values(), *self.val_metrics.values()]:
+            metric.reset()
+
+    def on_train_batch_begin(self, batch:int, logs=None):
+        for cb in self.callbacks:
+            cb.on_train_batch_begin(batch, logs)
+
+    def on_train_batch_end(self, batch:int, logs=None):
+        for cb in self.callbacks:
+            cb.on_train_batch_end(batch, logs)
+
+    def on_test_batch_begin(self, batch:int, logs=None):
+        for cb in self.callbacks:
+            cb.on_test_batch_begin(batch, logs)
+
+    def on_test_batch_end(self, batch:int, logs=None):
+        for cb in self.callbacks:
+            cb.on_test_batch_end(batch, logs)
