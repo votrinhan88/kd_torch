@@ -19,7 +19,6 @@ class Metric(ABC):
         """Return the latest metric value in a pythonic format."""
         return self.value.item()
 
-
 class Mean(Metric):
     def __init__(self):
         self.init_val = torch.zeros(1)
