@@ -99,6 +99,47 @@ class LeNet5_ReLU_MaxPool(LeNet5):
         self.S4 = nn.MaxPool2d(kernel_size=2, stride=2, padding=0)
 
 if __name__ == '__main__':
-    inputs = torch.rand(size=[128, 1, 32, 32])
-    print(LeNet5()(inputs).shape)
-    print(LeNet5_ReLU_MaxPool()(inputs).shape)
+    import torch.optim
+
+    # Change path
+    import os, sys
+    repo_path = os.path.abspath(os.path.join(__file__, '../../..'))
+    assert os.path.basename(repo_path) == 'kd_torch', "Wrong parent folder. Please change to 'kd_torch'"
+    sys.path.append(repo_path)
+
+    from dataloader import get_dataloader
+    from models.classifiers.utils import Trainer
+    
+    def test_mnist():
+        IMAGE_DIM = [1, 32, 32]
+        NUM_CLASSES = 10
+        NUM_EPOCHS = 10
+
+        dataloader = get_dataloader(
+            dataset='MNIST',
+            resize=IMAGE_DIM[1:],
+            rescale=[-0.5, 0.5],
+        )
+
+        net = LeNet5(
+            half_size=False,
+            input_dim=IMAGE_DIM,
+            num_classes=NUM_CLASSES,
+            return_logits=False
+        )
+
+        loss_fn = torch.nn.CrossEntropyLoss()
+        optimizer = torch.optim.Adam(params=net.parameters(), lr=1e-3)
+
+        trainer = Trainer(
+            model=net,
+            optimizer=optimizer,
+            loss_fn=loss_fn,
+        )
+        trainer.fit(
+            trainloader=dataloader['train'],
+            num_epochs=NUM_EPOCHS,
+            valloader=dataloader['test']
+        )
+
+    test_mnist()
