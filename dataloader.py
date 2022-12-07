@@ -40,16 +40,16 @@ def compute_mean_std(dataset:str) -> Tuple[torch.Tensor, torch.Tensor]:
     std = x.std(dim=reduce_dim)
     return mean, std
 
-def dataloader(dataset:str,
-               augmentation_trans:Optional[Callable]=None,
-               resize:Optional[Tuple[float, float]]=None,
-               rescale:Optional[Literal['standardization']| Tuple[float, float]]=None,
-               batch_size_train:int=128,
-               batch_size_test:int=1024,
-               drop_last:bool=False,
-               num_workers:Optional[int]=0,
-               onehot_label:bool=False,
-               ):
+def get_dataloader(dataset:str,
+                   augmentation_trans:Optional[Callable]=None,
+                   resize:Optional[Tuple[float, float]]=None,
+                   rescale:Optional[Literal['standardization']| Tuple[float, float]]=None,
+                   batch_size_train:int=128,
+                   batch_size_test:int=1024,
+                   drop_last:bool=False,
+                   num_workers:Optional[int]=0,
+                   onehot_label:bool=False,
+                   ):
     ROOT = './datasets'
     
     STANDARDIZATION_MEAN_STD = {
@@ -144,7 +144,7 @@ def dataloader(dataset:str,
     return dataloader
 
 if __name__ == '__main__':
-    ds = dataloader(
+    ds = get_dataloader(
         dataset='MNIST',
         rescale='standardization',
         onehot_label=True
