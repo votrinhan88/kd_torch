@@ -20,6 +20,8 @@ class LeNet5(torch.nn.Module):
                  half_size:bool=False,
                  input_dim:List[int]=[1, 32, 32],
                  num_classes:int=10,
+                 ActivationLayer=torch.nn.Tanh,
+                 PoolLayer=torch.nn.AvgPool2d,
                  return_logits:bool=False,
                  ):
         """Initialize model.
@@ -38,6 +40,8 @@ class LeNet5(torch.nn.Module):
         self.half_size = half_size
         self.input_dim = input_dim
         self.num_classes = num_classes
+        self.ActivationLayer = ActivationLayer
+        self.PoolLayer = PoolLayer
         self.return_logits = return_logits
 
         if self.half_size is False:
@@ -47,16 +51,16 @@ class LeNet5(torch.nn.Module):
         
         # Layers: C: convolutional, A: activation, S: pooling
         self.C1 = nn.Conv2d(in_channels=self.input_dim[0], out_channels=6//divisor, kernel_size=5, stride=1, padding=0)
-        self.A1 = nn.Tanh()
-        self.S2 = nn.AvgPool2d(kernel_size=2, stride=2, padding=0)
+        self.A1 = self.ActivationLayer()
+        self.S2 = self.PoolLayer(kernel_size=2, stride=2, padding=0)
         self.C3 = nn.Conv2d(in_channels=6//divisor, out_channels=16//divisor, kernel_size=5, stride=1, padding=0)
-        self.A3 = nn.Tanh()
-        self.S4 = nn.AvgPool2d(kernel_size=2, stride=2, padding=0)
+        self.A3 = self.ActivationLayer()
+        self.S4 = self.PoolLayer(kernel_size=2, stride=2, padding=0)
         self.C5 = nn.Conv2d(in_channels=16//divisor, out_channels=120//divisor, kernel_size=5, stride=1, padding=0)
-        self.A5 = nn.Tanh()
+        self.A5 = self.ActivationLayer()
         self.flatten = nn.Flatten()
         self.F6 = nn.Linear(in_features=120//divisor, out_features=84//divisor)
-        self.A6 = nn.Tanh()
+        self.A6 = self.ActivationLayer()
         self.logits = nn.Linear(in_features=84//divisor, out_features=self.num_classes)
         if self.return_logits is False:
             if self.num_classes == 1:
@@ -81,23 +85,6 @@ class LeNet5(torch.nn.Module):
             x = self.pred(x)
         return x
 
-class LeNet5_ReLU_MaxPool(LeNet5):
-    def __init__(self,
-                 half_size:bool=False,
-                 input_dim:List[int]=[1, 32, 32],
-                 num_classes:int=10,
-                 return_logits:bool=False
-                 ):
-        super().__init__(half_size, input_dim, num_classes, return_logits)
-        # Replace Tanh with ReLU
-        self.A1 = nn.ReLU()
-        self.A3 = nn.ReLU()
-        self.A5 = nn.ReLU()
-        self.A6 = nn.ReLU()
-        # Replace AvgPool2d with MaxPool2d
-        self.S2 = nn.MaxPool2d(kernel_size=2, stride=2, padding=0)
-        self.S4 = nn.MaxPool2d(kernel_size=2, stride=2, padding=0)
-
 if __name__ == '__main__':
     import torch.optim
 
@@ -109,11 +96,12 @@ if __name__ == '__main__':
 
     from dataloader import get_dataloader
     from models.classifiers.utils import Trainer
+    from callbacks.Callbacks import CSVLogger
     
     def test_mnist():
         IMAGE_DIM = [1, 32, 32]
         NUM_CLASSES = 10
-        NUM_EPOCHS = 10
+        NUM_EPOCHS = 3
 
         dataloader = get_dataloader(
             dataset='MNIST',
@@ -125,6 +113,8 @@ if __name__ == '__main__':
             half_size=False,
             input_dim=IMAGE_DIM,
             num_classes=NUM_CLASSES,
+            ActivationLayer=torch.nn.ReLU,
+            PoolLayer=torch.nn.MaxPool2d,
             return_logits=False
         )
 
@@ -136,10 +126,13 @@ if __name__ == '__main__':
             optimizer=optimizer,
             loss_fn=loss_fn,
         )
-        trainer.fit(
+        csv_logger = CSVLogger(filename='./logs/results.csv', append=True)
+        history = trainer.training_loop(
             trainloader=dataloader['train'],
             num_epochs=NUM_EPOCHS,
-            valloader=dataloader['test']
+            valloader=dataloader['test'],
+            callbacks=[csv_logger],
         )
+        print(*history.history.items(), sep='\n')
 
     test_mnist()
