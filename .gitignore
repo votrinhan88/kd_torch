@@ -130,4 +130,5 @@ dmypy.json
 
 # Custom settings
 datasets/
+logs/
 scrap.py
