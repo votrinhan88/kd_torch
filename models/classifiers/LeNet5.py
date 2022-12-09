@@ -1,7 +1,6 @@
 from typing import List
 
 import torch
-import torch.nn as nn
 
 class LeNet5(torch.nn.Module):
     '''Gradient-based learning applied to document recognition
@@ -12,7 +11,7 @@ class LeNet5(torch.nn.Module):
         `input_dim`: Dimension of input images. Defaults to `[1, 32, 32]`.
         `num_classes`: Number of output nodes. Defaults to `10`.
         `return_logits`: Flag to choose between return logits or probability.
-            Defaults to `False`.
+            Defaults to `True`.
 
     Two versions: LeNet-5 and LeNet-5-Half
     '''
@@ -22,7 +21,7 @@ class LeNet5(torch.nn.Module):
                  num_classes:int=10,
                  ActivationLayer=torch.nn.Tanh,
                  PoolLayer=torch.nn.AvgPool2d,
-                 return_logits:bool=False,
+                 return_logits:bool=True,
                  ):
         """Initialize model.
 
@@ -31,7 +30,7 @@ class LeNet5(torch.nn.Module):
             `input_dim`: Dimension of input images. Defaults to `[1, 32, 32]`.
             `num_classes`: Number of output nodes. Defaults to `10`.
             `return_logits`: Flag to choose between return logits or probability.
-                Defaults to `False`.
+                Defaults to `True`.
         """        
         assert isinstance(half_size, bool), '`half_size` must be of type bool'
         assert isinstance(return_logits, bool), '`return_logits` must be of type bool.'
@@ -50,23 +49,23 @@ class LeNet5(torch.nn.Module):
             divisor = 2
         
         # Layers: C: convolutional, A: activation, S: pooling
-        self.C1 = nn.Conv2d(in_channels=self.input_dim[0], out_channels=6//divisor, kernel_size=5, stride=1, padding=0)
+        self.C1 = torch.nn.Conv2d(in_channels=self.input_dim[0], out_channels=6//divisor, kernel_size=5, stride=1, padding=0)
         self.A1 = self.ActivationLayer()
         self.S2 = self.PoolLayer(kernel_size=2, stride=2, padding=0)
-        self.C3 = nn.Conv2d(in_channels=6//divisor, out_channels=16//divisor, kernel_size=5, stride=1, padding=0)
+        self.C3 = torch.nn.Conv2d(in_channels=6//divisor, out_channels=16//divisor, kernel_size=5, stride=1, padding=0)
         self.A3 = self.ActivationLayer()
         self.S4 = self.PoolLayer(kernel_size=2, stride=2, padding=0)
-        self.C5 = nn.Conv2d(in_channels=16//divisor, out_channels=120//divisor, kernel_size=5, stride=1, padding=0)
+        self.C5 = torch.nn.Conv2d(in_channels=16//divisor, out_channels=120//divisor, kernel_size=5, stride=1, padding=0)
         self.A5 = self.ActivationLayer()
-        self.flatten = nn.Flatten()
-        self.F6 = nn.Linear(in_features=120//divisor, out_features=84//divisor)
+        self.flatten = torch.nn.Flatten()
+        self.F6 = torch.nn.Linear(in_features=120//divisor, out_features=84//divisor)
         self.A6 = self.ActivationLayer()
-        self.logits = nn.Linear(in_features=84//divisor, out_features=self.num_classes)
+        self.logits = torch.nn.Linear(in_features=84//divisor, out_features=self.num_classes)
         if self.return_logits is False:
             if self.num_classes == 1:
-                self.pred = nn.Sigmoid()
+                self.pred = torch.nn.Sigmoid()
             elif self.num_classes > 1:
-                self.pred = nn.Softmax(dim=1)
+                self.pred = torch.nn.Softmax(dim=1)
 
     def forward(self, x):
         x = self.C1(x)
@@ -101,12 +100,12 @@ if __name__ == '__main__':
     def test_mnist():
         IMAGE_DIM = [1, 32, 32]
         NUM_CLASSES = 10
-        NUM_EPOCHS = 3
+        NUM_EPOCHS = 10
 
         dataloader = get_dataloader(
             dataset='MNIST',
             resize=IMAGE_DIM[1:],
-            rescale=[-0.5, 0.5],
+            rescale=[-1, 1],
         )
 
         net = LeNet5(
@@ -115,7 +114,6 @@ if __name__ == '__main__':
             num_classes=NUM_CLASSES,
             ActivationLayer=torch.nn.ReLU,
             PoolLayer=torch.nn.MaxPool2d,
-            return_logits=False
         )
 
         loss_fn = torch.nn.CrossEntropyLoss()
@@ -126,13 +124,12 @@ if __name__ == '__main__':
             optimizer=optimizer,
             loss_fn=loss_fn,
         )
-        csv_logger = CSVLogger(filename='./logs/results.csv', append=True)
-        history = trainer.training_loop(
+        csv_logger = CSVLogger(filename=f'./logs/{net.__class__.__name__}.csv', append=True)
+        trainer.training_loop(
             trainloader=dataloader['train'],
             num_epochs=NUM_EPOCHS,
-            valloader=dataloader['test'],
+            valloader=dataloader['val'],
             callbacks=[csv_logger],
         )
-        print(*history.history.items(), sep='\n')
 
     test_mnist()
