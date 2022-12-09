@@ -17,10 +17,17 @@ class Trainer:
                  model:torch.nn.Module,
                  optimizer:torch.optim.Optimizer,
                  loss_fn:Callable[[Any], torch.Tensor],
+                 device:Optional[str]=None,
                  ):
-        self.model = model
+        # Parse device
+        if device is None:
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.device = torch.device(device)
+
+        self.model = model.to(self.device)
         self.optimizer = optimizer
         self.loss_fn = loss_fn
+
         # Metrics
         self.train_metrics:Dict[str, Metric] = {'loss': Mean(), 'accuracy': CategoricalAccuracy()}
         self.val_metrics = copy.deepcopy(self.train_metrics)
@@ -84,7 +91,9 @@ class Trainer:
         return self.history
 
     def train_batch(self, data:Tuple[torch.Tensor, torch.Tensor]):
+        self.model.train()
         input, label = data
+        input, label = input.to(self.device), label.to(self.device)
         # Forward
         prediction = self.model(input)
         loss = self.loss_fn(prediction, label)
@@ -92,13 +101,15 @@ class Trainer:
         loss.backward()
         self.optimizer.step()
         self.optimizer.zero_grad()
-        # Metrics
         with torch.inference_mode():
+            # Metrics
             self.train_metrics['loss'].update(new_entry=loss)
             self.train_metrics['accuracy'].update(label=label, prediction=prediction)
 
     def test_batch(self, data:Tuple[torch.Tensor, torch.Tensor]):
+        self.model.eval()
         input, label = data
+        input, label = input.to(self.device), label.to(self.device)
         with torch.inference_mode():
             # Forward
             prediction = self.model(input)
@@ -125,6 +136,9 @@ class Trainer:
     def on_epoch_begin(self, epoch:int, logs=None):
         for cb in self.callbacks:
             cb.on_epoch_begin(epoch, logs)
+        # Reset metrics
+        for metric in [*self.train_metrics.values(), *self.val_metrics.values()]:
+            metric.reset()
     
     def on_epoch_train_end(self, epoch:int, logs=None):
         for cb in self.callbacks:
@@ -137,9 +151,6 @@ class Trainer:
     def on_epoch_end(self, epoch:int, logs=None):
         for cb in self.callbacks:
             cb.on_epoch_end(epoch, logs)
-        # Reset metrics
-        for metric in [*self.train_metrics.values(), *self.val_metrics.values()]:
-            metric.reset()
 
     def on_train_batch_begin(self, batch:int, logs=None):
         for cb in self.callbacks:
