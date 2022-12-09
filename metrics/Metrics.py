@@ -2,6 +2,9 @@ from abc import ABC, abstractmethod
 import torch
 
 class Metric(ABC):
+    def __repr__(self):
+        return f"{self.__class__.__name__}(latest={self.latest:.4g})"
+
     """Base class for metrics."""
     @abstractmethod
     def update(self):
@@ -14,31 +17,24 @@ class Metric(ABC):
         pass
 
     @property
-    @abstractmethod
     def latest(self):
         """Return the latest metric value in a pythonic format."""
         return self.value.item()
 
 class Mean(Metric):
     def __init__(self):
-        self.init_val = torch.zeros(1)
         self.reset()
 
     def update(self, new_entry:torch.Tensor) -> torch.Tensor:
         self.step += 1
-        self.value = (
-            self.value*self.step/(self.step + 1) +
-                       new_entry/(self.step + 1)
-        )
+        self.accum_value += new_entry
+        self.value = self.accum_value/self.step
         return self.value
 
     def reset(self):
-        self.step:int = -1
-        self.value = self.init_val
-
-    @property
-    def latest(self):
-        return super().latest
+        self.step:int = 0
+        self.accum_value = torch.zeros(1)
+        self.value = self.accum_value/self.step
 
 class CategoricalAccuracy(Metric):
     def __init__(self):
@@ -59,7 +55,9 @@ class CategoricalAccuracy(Metric):
         self.label = torch.Tensor()
         self.pred_label = torch.Tensor()
         self.num_observed = torch.zeros(1)
+        self.value = (self.label == self.pred_label).sum()/self.num_observed
 
-    @property
-    def latest(self):
-        return super().latest
+if __name__ == '__main__':
+    mean = Mean()
+    accuracy = CategoricalAccuracy()
+    print(mean, accuracy)
