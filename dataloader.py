@@ -45,7 +45,7 @@ def get_dataloader(dataset:str,
                    resize:Optional[Tuple[float, float]]=None,
                    rescale:Optional[Literal['standardization']| Tuple[float, float]]=None,
                    batch_size_train:int=128,
-                   batch_size_test:int=1024,
+                   batch_size_val:int=1024,
                    drop_last:bool=False,
                    num_workers:Optional[int]=0,
                    onehot_label:bool=False,
@@ -114,7 +114,7 @@ def get_dataloader(dataset:str,
             target_transform=target_transform,
             download=True
         ),
-        'test': DATASET_CLASS[dataset](
+        'val': DATASET_CLASS[dataset](
             root=ROOT,
             train=False,
             transform=transforms_test,
@@ -132,9 +132,9 @@ def get_dataloader(dataset:str,
             drop_last=drop_last,
             worker_init_fn=WORKER_INIT_FN
         ),
-        'test': DataLoader(
-            dataset=_dataset['test'],
-            batch_size=batch_size_test,
+        'val': DataLoader(
+            dataset=_dataset['val'],
+            batch_size=batch_size_val,
             shuffle=False,
             num_workers=num_workers,
             drop_last=False,
