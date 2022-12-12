@@ -13,15 +13,7 @@ if __name__ == '__main__':
 from models.classifiers.utils import Trainer
 from metrics.Metrics import Metric, Mean, BinaryAccuracy
 from callbacks.Callbacks import History
-from models.GANs.utils import MakeSyntheticGIFCallback
-
-class Reshape(torch.nn.Module):
-    def __init__(self, out_shape:List[int]):
-        super().__init__()
-        self.out_shape = out_shape
-    
-    def forward(self, x:torch.Tensor):
-        return x.view([-1, *self.out_shape])
+from models.GANs.utils import Reshape, MakeSyntheticGIFCallback
 
 class Generator(torch.nn.Module):
     """Generator for Generative Adversarial Networks.
@@ -243,11 +235,11 @@ class GAN(Trainer):
         return x_synth
 
 if __name__ == '__main__':
-    # from models.GANs.utils import MakeSyntheticGIFCallback
     from torchinfo import summary
     from dataloader import get_dataloader
     from callbacks.Callbacks import CSVLogger
-
+    from models.GANs.utils import MakeSyntheticGIFCallback
+    
     def test_mnist():
         LATENT_DIM = 100
         IMAGE_DIM = [1, 28, 28]

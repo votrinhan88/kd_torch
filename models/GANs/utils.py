@@ -17,6 +17,14 @@ if __name__ == '__main__':
 
 from callbacks.Callbacks import Callback
 
+class Reshape(torch.nn.Module):
+    def __init__(self, out_shape:List[int]):
+        super().__init__()
+        self.out_shape = out_shape
+    
+    def forward(self, x:torch.Tensor):
+        return x.view([-1, *self.out_shape])
+
 class MakeSyntheticGIFCallback(Callback):
     """Callback to generate synthetic images, typically used with a Generative
     Adversarial Network.
