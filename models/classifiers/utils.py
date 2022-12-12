@@ -63,10 +63,7 @@ class Trainer:
                 batch_logs = {}
                 self.on_train_batch_begin(batch, batch_logs)
                 self.train_batch(data)
-                batch_logs.update({
-                    'loss':self.train_metrics['loss'].latest,
-                    'accuracy':self.train_metrics['accuracy'].latest,
-                })
+                batch_logs.update({k:v.latest for (k, v) in self.train_metrics.items()})
                 self.on_train_batch_end(batch, batch_logs)
             epoch_logs.update(batch_logs)
             self.on_epoch_train_end(epoch, epoch_logs)
@@ -75,12 +72,10 @@ class Trainer:
             if valloader is not None:
                 self.on_epoch_test_begin(epoch, epoch_logs)
                 for batch, data in enumerate(self.val_phase_progress):
+                    batch_logs = {}
                     self.on_test_batch_begin(batch, batch_logs)
                     self.test_batch(data)
-                    batch_logs = {
-                        'loss':self.val_metrics['loss'].latest,
-                        'accuracy':self.val_metrics['accuracy'].latest,
-                    }
+                    batch_logs.update({k:v.latest for (k, v) in self.val_metrics.items()})
                     self.on_test_batch_end(batch, batch_logs)
                 epoch_logs.update({f'val_{key}': value for key, value in batch_logs.items()})
             self.on_epoch_end(epoch, epoch_logs)
@@ -91,25 +86,29 @@ class Trainer:
         return self.history
 
     def train_batch(self, data:Tuple[torch.Tensor, torch.Tensor]):
-        self.model.train()
+        # Unpack data
         input, label = data
         input, label = input.to(self.device), label.to(self.device)
+        
+        self.model.train()
+        self.optimizer.zero_grad()
         # Forward
         prediction = self.model(input)
         loss = self.loss_fn(prediction, label)
         # Backward
         loss.backward()
         self.optimizer.step()
-        self.optimizer.zero_grad()
         with torch.inference_mode():
             # Metrics
             self.train_metrics['loss'].update(new_entry=loss)
             self.train_metrics['accuracy'].update(label=label, prediction=prediction)
 
     def test_batch(self, data:Tuple[torch.Tensor, torch.Tensor]):
-        self.model.eval()
+        # Unpack data
         input, label = data
         input, label = input.to(self.device), label.to(self.device)
+        
+        self.model.eval()
         with torch.inference_mode():
             # Forward
             prediction = self.model(input)
@@ -117,7 +116,7 @@ class Trainer:
             # Metrics
             self.val_metrics['loss'].update(new_entry=loss)
             self.val_metrics['accuracy'].update(label=label, prediction=prediction)
-
+    
     def hook_callbacks(self, callbacks:List[Callback]):
         self.callbacks:List[Callback] = [History(), ProgressBar()]
         if callbacks is not None:
