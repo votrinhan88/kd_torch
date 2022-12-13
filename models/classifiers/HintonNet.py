@@ -1,14 +1,14 @@
-if __name__ == '__main__':
-    # Change path
-    import os, sys
-    repo_path = os.path.abspath(os.path.join(__file__, '../../..'))
-    assert os.path.basename(repo_path) == 'kd_torch', "Wrong parent folder. Please change to 'kd_torch'"
-    sys.path.append(repo_path)
+# Change path
+import os, sys
+repo_path = os.path.abspath(os.path.join(__file__, '../../..'))
+assert os.path.basename(repo_path) == 'kd_torch', "Wrong parent folder. Please change to 'kd_torch'"
+if sys.path[0] != repo_path:
+    sys.path.insert(0, repo_path)
 
 from typing import List, Union
 import torch
 import numpy as np
-from callbacks.Callbacks import Callback
+from utils.callbacks import Callback
 
 class HintonNet(torch.nn.Module):
     """Baseline model in implemented in paper 'Distilling the Knowledge in a Neural
@@ -113,8 +113,8 @@ class MaxNormConstraint(Callback):
 if __name__ == '__main__':
     from torchinfo import summary
     from dataloader import get_dataloader
-    from models.classifiers.utils import Trainer
-    from callbacks.Callbacks import CSVLogger
+    from models.classifiers.utils import ClassifierTrainer
+    from utils.callbacks import CSVLogger
 
     def test_mnist():
         IMAGE_DIM = [1, 28, 28]
@@ -135,8 +135,8 @@ if __name__ == '__main__':
         )
         summary(model=net, input_size=[BATCH_SIZE, *IMAGE_DIM])
 
-        trainer = Trainer(
-            model=net,
+        trainer = ClassifierTrainer(model=net)
+        trainer.compile(
             optimizer=torch.optim.Adam(params=net.parameters(), lr=1e-3),
             loss_fn=torch.nn.CrossEntropyLoss()
         )

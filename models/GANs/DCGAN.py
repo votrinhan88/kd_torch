@@ -1,12 +1,14 @@
+# Change path
+import os, sys
+repo_path = os.path.abspath(os.path.join(__file__, '../../..'))
+assert os.path.basename(repo_path) == 'kd_torch', "Wrong parent folder. Please change to 'kd_torch'"
+if sys.path[0] != repo_path:
+    sys.path.insert(0, repo_path)
+
 from typing import List
+
 import torch
 import numpy as np
-
-if __name__ == '__main__':
-    import os, sys
-    repo_path = os.path.abspath(os.path.join(__file__, '../../..'))
-    assert os.path.basename(repo_path) == 'kd_torch', "Wrong parent folder. Please change to 'kd_torch'"
-    sys.path.append(repo_path)
 
 from models.GANs.GAN import GAN
 from models.GANs.utils import Reshape
@@ -55,7 +57,7 @@ class DC_Generator(torch.nn.Module):
         self.bnorm_0 = torch.nn.BatchNorm2d(num_features=self.base_dim[0])
         self.relu_0  = torch.nn.ReLU()
 
-        self.convt_blocks = [None for i in range(num_conv)]
+        convt_blocks = [None for i in range(num_conv)]
         for i in range(num_conv):
             in_channels = self.base_dim[0] // 2**i
             out_channels = self.base_dim[0] // 2**(i+1)
@@ -71,9 +73,8 @@ class DC_Generator(torch.nn.Module):
                     torch.nn.ConvTranspose2d(in_channels=in_channels, out_channels=self.image_dim[0], kernel_size=4, stride=2, padding=1, bias=False),
                     torch.nn.Tanh()
                 )
-            self.convt_blocks[i] = block
-
-        self.convt_blocks = torch.nn.Sequential(*self.convt_blocks)
+            convt_blocks[i] = block
+        self.convt_blocks = torch.nn.Sequential(*convt_blocks)
 
     def forward(self, x):
         x = self.dense_0(x)
@@ -168,7 +169,7 @@ class DCGAN(GAN):
 if __name__ == '__main__':
     from torchinfo import summary
     from dataloader import get_dataloader
-    from callbacks.Callbacks import CSVLogger
+    from utils.callbacks import CSVLogger
     from models.GANs.utils import MakeSyntheticGIFCallback
 
     def test_mnist():
@@ -190,19 +191,16 @@ if __name__ == '__main__':
         crit = DC_Discriminator(
             image_dim=IMAGE_DIM,
             return_logits=False)
-        optimizer_gen = torch.optim.Adam(params=gen.parameters(), lr=2e-4, betas=(0.5, 0.999))
-        optimizer_crit = torch.optim.Adam(params=crit.parameters(), lr=2e-4, betas=(0.5, 0.999))
-        loss_fn = torch.nn.BCELoss()
 
         summary(model=gen, input_size=[128, LATENT_DIM])
         summary(model=crit, input_size=[128, *IMAGE_DIM])
         
-        gan = GAN(
-            generator=gen,
-            critic=crit,
-            optimizer_gen=optimizer_gen,
-            optimizer_crit=optimizer_crit,
-            loss_fn=loss_fn)
+        gan = DCGAN(generator=gen, critic=crit)
+        gan.compile(
+            optimizer_gen=torch.optim.Adam(params=gen.parameters(), lr=2e-4, betas=(0.5, 0.999)),
+            optimizer_crit=torch.optim.Adam(params=crit.parameters(), lr=2e-4, betas=(0.5, 0.999)),
+            loss_fn=torch.nn.BCELoss()
+        )
 
         csv_logger = CSVLogger(
             filename=f'./logs/{gan.__class__.__name__}.csv',

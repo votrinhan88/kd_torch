@@ -1,18 +1,17 @@
-from typing import List, Tuple, Any, Callable, Optional, Dict
+# Change path
+import os, sys
+repo_path = os.path.abspath(os.path.join(__file__, '../../..'))
+assert os.path.basename(repo_path) == 'kd_torch', "Wrong parent folder. Please change to 'kd_torch'"
+if sys.path[0] != repo_path:
+    sys.path.insert(0, repo_path)
+
+from typing import Sequence, Tuple, Any, Callable, Optional
+
 import torch
 import numpy as np
-from tqdm.auto import tqdm
-
-if __name__ == '__main__':
-    # Change path
-    import os, sys
-    repo_path = os.path.abspath(os.path.join(__file__, '../../..'))
-    assert os.path.basename(repo_path) == 'kd_torch', "Wrong parent folder. Please change to 'kd_torch'"
-    sys.path.append(repo_path)
 
 from models.classifiers.utils import Trainer
-from metrics.Metrics import Metric, Mean, BinaryAccuracy
-from callbacks.Callbacks import History
+from utils.metrics import Mean, BinaryAccuracy
 from models.GANs.utils import Reshape, MakeSyntheticGIFCallback
 
 class Generator(torch.nn.Module):
@@ -26,7 +25,7 @@ class Generator(torch.nn.Module):
     """
     def __init__(self,
                  latent_dim:int=100,
-                 image_dim:List[int]=[1, 28, 28],
+                 image_dim:Sequence[int]=[1, 28, 28],
                  ):
         """Initialize generator.
         
@@ -72,7 +71,7 @@ class Discriminator(torch.nn.Module):
     https://github.com/eriklindernoren/Keras-GAN/blob/master/gan/gan.py
     """    
     def __init__(self,
-                 image_dim:List[int]=[1, 28, 28],
+                 image_dim:Sequence[int]=[1, 28, 28],
                  return_logits:bool=True,
                 ):
         """Initialize discriminator.
@@ -123,23 +122,12 @@ class GAN(Trainer):
     def __init__(self,
                  generator:torch.nn.Module,
                  critic:torch.nn.Module,
-                 optimizer_crit:torch.optim.Optimizer,
-                 optimizer_gen:torch.optim.Optimizer,
-                 loss_fn:Callable[[Any], torch.Tensor]=torch.nn.BCELoss(),
                  latent_dim:Optional[int]=None,
-                 image_dim:Optional[List[int]]=None,
-                 device:Optional[str]=None,
-                 ):
-        # Parse device
-        if device is None:
-            device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.device = torch.device(device)
-
+                 image_dim:Optional[Sequence[int]]=None,
+                 device:Optional[str]=None):
+        super().__init__(device=device)
         self.generator = generator.to(self.device)
         self.critic = critic.to(self.device)
-        self.optimizer_crit = optimizer_crit
-        self.optimizer_gen = optimizer_gen
-        self.loss_fn = loss_fn
 
         if latent_dim is None:
             self.latent_dim:int = self.generator.latent_dim
@@ -151,22 +139,25 @@ class GAN(Trainer):
         elif image_dim is not None:
             self.image_dim = image_dim
 
+    def compile(self,
+                optimizer_crit:torch.optim.Optimizer,
+                optimizer_gen:torch.optim.Optimizer,
+                loss_fn:Callable[[Any], torch.Tensor]=torch.nn.BCELoss()):
+        super().compile()
+        self.optimizer_crit = optimizer_crit
+        self.optimizer_gen = optimizer_gen
+        self.loss_fn = loss_fn
+
         # Metrics
-        self.train_metrics:Dict[str, Metric] = {
+        self.train_metrics = {
             'loss_real': Mean(),
             'loss_synth': Mean(),
             'loss_gen': Mean(),
         }
-        self.val_metrics:Dict[str, BinaryAccuracy] = {
+        self.val_metrics = {
             'acc_real': BinaryAccuracy(),
             'acc_synth': BinaryAccuracy(),
         }
-        # To be initialize by callback History
-        self.history:History
-        # To be initialize by callback ProgressBar
-        self.training_progress:tqdm = None
-        self.train_phase_progress:tqdm = None
-        self.val_phase_progress:tqdm = None
 
     def train_batch(self, data:Tuple[torch.Tensor, torch.Tensor]):
         # Unpack data
@@ -236,8 +227,9 @@ class GAN(Trainer):
 
 if __name__ == '__main__':
     from torchinfo import summary
+
     from dataloader import get_dataloader
-    from callbacks.Callbacks import CSVLogger
+    from utils.callbacks import CSVLogger
     from models.GANs.utils import MakeSyntheticGIFCallback
     
     def test_mnist():
@@ -253,19 +245,15 @@ if __name__ == '__main__':
 
         gen = Generator(latent_dim=LATENT_DIM, image_dim=IMAGE_DIM)
         crit = Discriminator(image_dim=IMAGE_DIM, return_logits=False)
-        optimizer_gen = torch.optim.Adam(params=gen.parameters(), lr=2e-4, betas=(0.5, 0.999))
-        optimizer_crit = torch.optim.Adam(params=crit.parameters(), lr=2e-4, betas=(0.5, 0.999))
-        loss_fn = torch.nn.BCELoss()
-
+        
         summary(model=gen, input_size=[128, LATENT_DIM])
         summary(model=crit, input_size=[128, *IMAGE_DIM])
         
-        gan = GAN(
-            generator=gen,
-            critic=crit,
-            optimizer_gen=optimizer_gen,
-            optimizer_crit=optimizer_crit,
-            loss_fn=loss_fn)
+        gan = GAN(generator=gen, critic=crit)
+        gan.compile(
+            optimizer_gen=torch.optim.Adam(params=gen.parameters(), lr=2e-4, betas=(0.5, 0.999)),
+            optimizer_crit=torch.optim.Adam(params=crit.parameters(), lr=2e-4, betas=(0.5, 0.999)),
+            loss_fn=torch.nn.BCELoss())
 
         csv_logger = CSVLogger(
             filename=f'./logs/{gan.__class__.__name__}.csv',

@@ -1,29 +1,79 @@
-from typing import Union, List, Callable, Any
+# Change path
+import os, sys
+repo_path = os.path.abspath(os.path.join(__file__, '../../..'))
+assert os.path.basename(repo_path) == 'kd_torch', "Wrong parent folder. Please change to 'kd_torch'"
+if sys.path[0] != repo_path:
+    sys.path.insert(0, repo_path)
+
 import glob
-from typing import Callable, Union, List, Any
-import os
+from typing import Callable, Union, Any, Sequence, Literal
+import warnings
+
 import PIL
 import torch
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
+import numpy as np
 
-if __name__ == '__main__':
-    # Change path
-    import os, sys
-    repo_path = os.path.abspath(os.path.join(__file__, '../../..'))
-    assert os.path.basename(repo_path) == 'kd_torch', "Wrong parent folder. Please change to 'kd_torch'"
-    sys.path.append(repo_path)
-
-from callbacks.Callbacks import Callback
+from utils.callbacks import Callback
 
 class Reshape(torch.nn.Module):
-    def __init__(self, out_shape:List[int]):
+    def __init__(self, out_shape:Sequence[int]):
         super().__init__()
         self.out_shape = out_shape
     
-    def forward(self, x:torch.Tensor):
+    def forward(self, x:torch.Tensor) -> torch.Tensor:
         return x.view([-1, *self.out_shape])
+
+class OneHotEncoding(torch.nn.Module):
+    def __init__(self, num_classes:int, dtype:torch.dtype=torch.float):
+        super().__init__()
+        self.num_classes = num_classes
+        self.dtype = dtype
+    
+    def forward(self, x:torch.Tensor) -> torch.Tensor:
+        x = torch.nn.functional.one_hot(x.long(), num_classes=self.num_classes)
+        x = x.squeeze(dim=-2)
+        x = x.to(dtype=self.dtype)
+        return x
+
+class Concatenate(torch.nn.Module):
+    def forward(self, tensors:Sequence[torch.Tensor]) -> torch.Tensor:
+        return torch.cat(tensors, dim=1)
+
+class Repeat2d(torch.nn.Module):
+    """Repeats the input based on given size.
+
+    Typically, it is used for the discriminator in conditional GAN; spefically to
+    repeat a multi-hot/one-hot vector to a stack of all-ones and and all-zeros
+    images (before concatenating with real images).
+
+    Args:
+        `repeats`: Number of times to repeat the width and height.
+    """
+    NUM_REPEATS = 2
+    def __init__(self, repeats:Sequence[int], **kwargs):
+        """Initialize layer.
+        
+        Args:
+            `repeats`: Number of times to repeat the width and height.
+        """
+        if any([not isinstance(item, int) for item in repeats]):
+            raise TypeError(
+                f"Expected a sequence of {self.NUM_REPEATS} integers, got {type(repeats)}."
+            )
+        if len(repeats) != self.NUM_REPEATS:
+            raise ValueError(
+                f"Expected a sequence of {self.NUM_REPEATS} integers, got {type(repeats)}."
+            )
+        super().__init__(**kwargs)
+        self.repeats = repeats
+
+    def forward(self, x:torch.Tensor) -> torch.Tensor:
+        for dim in torch.arange(start=2, end=2+self.NUM_REPEATS):
+            x = x.unsqueeze(dim=dim)
+        return x.repeat(repeats=[1, 1, *self.repeats])
 
 class MakeSyntheticGIFCallback(Callback):
     """Callback to generate synthetic images, typically used with a Generative
@@ -54,13 +104,12 @@ class MakeSyntheticGIFCallback(Callback):
                  postprocess_fn:Union[None, Callable[[Any], Any]]=None,
                  normalize:bool=True,
                  latent_dim:Union[None, int]=None,
-                 image_dim:Union[None, List[int]]=None,
+                 image_dim:Union[None, Sequence[int]]=None,
                  keep_noise:bool=True,
                  seed:Union[None, int]=None,
                  delete_png:bool=True,
                  save_freq:int=1,
-                 duration:float=5000,
-                 **kwargs):
+                 duration:float=5000):
         """Initialize callback.
         
         Args:
@@ -81,7 +130,7 @@ class MakeSyntheticGIFCallback(Callback):
             `duration`: Duration of the generated GIF in milliseconds.
                 Defaults to `5000`.
         """
-        super().__init__(**kwargs)
+        super().__init__()
         self.filename = filename
         self.nrows = nrows
         self.ncols = ncols
@@ -215,3 +264,397 @@ class MakeSyntheticGIFCallback(Callback):
 
     def modify_savepath(self, value:int):
         return f"{self.path_png_folder}/{self.host.__class__.__name__}_epoch_{value:04d}.png"
+
+class MakeConditionalSyntheticGIFCallback(MakeSyntheticGIFCallback):
+    """Callback to generate synthetic images, typically used with a Conditional
+    Generative Adversarial Network.
+
+    Args:
+        `filename`: Path to save GIF to. Defaults to `'./logs/CGAN.gif'`.
+        `target_classes`: The conditional target classes to make synthetic images,
+            also is the columns in the figure. Leave as `None` to include all
+            classes. Defaults to `None`.
+        `num_samples_per_class`: Number of sample per class, also is the number of
+            rows in the figure. Defaults to `5`.
+        `postprocess_fn`: Post-processing function to map synthetic images back to
+            the plot range, ideally [0, 1]. Leave as `None` to skip post-processing.  
+            Defaults to `None`.
+        `latent_dim`: Dimension of latent space, leave as `None` to be parsed from
+            model. Defaults to `None`.
+        `image_dim`: Dimension of synthetic images, leave as `None` to be parsed
+            from model. Defaults to `None`.
+        `num_classes`: Number of classes, leave as `None` to be parsed from model.
+            Defaults to `None`.
+        `class_names`: Sequence of name of labels, should have length equal to total
+            number of classes. Leave as `None` for generic `'class x'` names.
+            Defaults to `None`.
+        `onehot_input`: Flag to indicate whether the GAN model/generator receives
+            one-hot or label encoded target classes, leave as `None` to be parsed
+            from model. Defaults to `None`.
+        `keep_noise`: Flag to feed the same latent noise to generator for the whole
+            training. Defaults to `True`.
+        `delete_png`: Flag to delete PNG files and folder at `filename/png` after
+            training. Defaults to `True`.
+        `duration`: Duration of the generated GIF in milliseconds.
+            Defaults to `5000`.
+    """
+    def __init__(self,
+                 filename:str='./logs/CGAN.gif',
+                 target_classes:Union[None, Sequence[int]]=None,
+                 num_samples_per_class:int=5,
+                 postprocess_fn:Union[None, Callable[[Any], Any]]=None,
+                 normalize:bool=True,
+                 latent_dim:Union[None, int]=None,
+                 image_dim:Union[None, Sequence[int]]=None,
+                 num_classes:Union[None, int]=None,
+                 class_names:Union[None, Sequence[str]]=None,
+                 onehot_input:Union[None, bool]=None,
+                 keep_noise:bool=True,
+                 seed:Union[None, int]=None,
+                 delete_png:bool=True,
+                 save_freq:int=1,
+                 duration:float=5000):
+        """Initialize callback.
+        
+        Args:
+            `filename`: Path to save GIF to. Defaults to `'./logs/CGAN.gif'`.
+            `target_classes`: The conditional target classes to make synthetic images,
+                also is the columns in the figure. Leave as `None` to include all
+                classes. Defaults to `None`.
+            `num_samples_per_class`: Number of sample per class, also is the number of
+                rows in the figure. Defaults to `5`.
+            `postprocess_fn`: Post-processing function to map synthetic images back to
+                the plot range, ideally [0, 1]. Leave as `None` to skip post-processing.  
+                Defaults to `None`.
+            `latent_dim`: Dimension of latent space, leave as `None` to be parsed from
+                model. Defaults to `None`.
+            `image_dim`: Dimension of synthetic images, leave as `None` to be parsed
+                from model. Defaults to `None`.
+            `num_classes`: Number of classes, leave as `None` to be parsed from model.
+                Defaults to `None`.
+            `class_names`: Sequence of name of labels, should have length equal to total
+                number of classes. Leave as `None` for generic `'class x'` names.
+                Defaults to `None`.
+            `onehot_input`: Flag to indicate whether the GAN model/generator receives
+                one-hot or label encoded target classes, leave as `None` to be parsed
+                from model. Defaults to `None`.
+            `keep_noise`: Flag to feed the same latent noise to generator for the whole
+                training. Defaults to `True`.
+            `delete_png`: Flag to delete PNG files and folder at `filename/png` after
+                training. Defaults to `True`.
+            `duration`: Duration of the generated GIF in milliseconds.
+                Defaults to `5000`.
+        """                 
+        super(MakeConditionalSyntheticGIFCallback, self).__init__(
+            filename=filename,
+            nrows=None,
+            ncols=None,
+            postprocess_fn=postprocess_fn,
+            normalize=normalize,
+            latent_dim=latent_dim,
+            image_dim=image_dim,
+            keep_noise=keep_noise,
+            seed=seed,
+            delete_png=delete_png,
+            save_freq=save_freq,
+            duration=duration,
+        )
+        self.target_classes = target_classes
+        self.num_samples_per_class = num_samples_per_class
+        self.num_classes = num_classes
+        self.class_names = class_names
+        self.onehot_input = onehot_input
+
+    def handle_args(self):
+        super(MakeConditionalSyntheticGIFCallback, self).handle_args()
+        if self.num_classes is None:
+            self.num_classes:int = self.host.num_classes
+
+        if self.class_names is None:
+            self.class_names = [f'Class {i}' for i in range(self.num_classes)]
+
+        if self.onehot_input is None:
+            self.onehot_input:bool = self.host.onehot_input
+
+        if self.target_classes is None:
+            self.target_classes = [label for label in range(self.num_classes)]
+        
+        self.nrows = self.num_samples_per_class
+        self.ncols = len(self.target_classes)
+
+    def precompute_inputs(self):
+        super().precompute_inputs()
+
+        self.label = torch.Tensor(self.target_classes).repeat([self.nrows])
+        if self.onehot_input is True:
+            self.label = torch.nn.functional.one_hot(tensor=self.label, num_classes=self.num_classes)
+
+    def synthesize_images(self):
+        if self.keep_noise is False:
+            batch_size = self.nrows*self.ncols
+            self.latent_noise = torch.normal(mean=0, std=1, size=[batch_size, self.latent_dim])   
+                    
+        x_synth = self.host.generator([self.latent_noise, self.label])
+        x_synth = self.postprocess_fn(x_synth)
+        return x_synth
+
+    def modify_axis(self, axis:Axes):
+        xticks = (self.image_dim[1] + 1)*torch.arange(len(self.target_classes)) + self.image_dim[1]/2
+        xticklabels = [self.class_names[label] for label in self.target_classes]
+        
+        axis.set_frame_on(False)
+        axis.tick_params(axis='both', length=0)
+        axis.set(yticks=[], xticks=xticks, xticklabels=xticklabels)
+
+class MakeInterpolateSyntheticGIFCallback(MakeSyntheticGIFCallback):
+    """Callback to generate synthetic images, interpolated between the classes of a
+    Conditional Generative Adversarial Network.
+    
+    The callback can only work with models receiving one-hot encoded inputs. It
+    will make figures at the end of the last epoch.
+    
+    Args:
+        `filename`: Path to save GIF to. Defaults to `'./logs/GAN_itpl.gif'`.
+        `start_classes`: Classes at the start of interpolation along the rows, leave
+            as `None` to include all classes. Defaults to `None`.
+        `stop_classes`: Classes at the stop of interpolation along the columns, leave
+            as `None` to include all classes. Defaults to `None`.
+        `num_interpolate`: Number of interpolation. Defaults to `21`.
+        `postprocess_fn`: Post-processing function to map synthetic images back to
+            the plot range, ideally [0, 1]. Leave as `None` to skip post-processing.  
+            Defaults to `None`.
+        `latent_dim`: Dimension of latent space, leave as `None` to be parsed from
+            model. Defaults to `None`.
+        `image_dim`: Dimension of synthetic images, leave as `None` to be parsed
+            from model. Defaults to `None`.
+        `num_classes`: Number of classes, leave as `None` to be parsed from model.
+            Defaults to `None`.
+        `class_names`: Sequence of name of labels, should have length equal to total
+            number of classes. Leave as `None` for generic `'class x'` names.
+            Defaults to `None`.
+        `keep_noise`: Flag to feed the same latent noise to generator for the whole
+            training. Defaults to `True`.
+        `delete_png`: Flag to delete PNG files and folder at `filename/png` after
+            training. Defaults to `True`.
+        `duration`: Duration of the generated GIF in milliseconds.
+            Defaults to `5000`.
+    """
+    def __init__(self,
+                 filename:str='./logs/GAN_itpl.gif',
+                 start_classes:Sequence[int]=None,
+                 stop_classes:Sequence[int]=None,
+                 num_itpl:int=51,
+                 itpl_method:Literal['linspace', 'slerp']='linspace',
+                 postprocess_fn:Union[None, Callable[[Any], Any]]=None,
+                 normalize:bool=True,
+                 latent_dim:Union[None, int]=None,
+                 image_dim:Union[None, Sequence[int]]=None,
+                 num_classes:Union[None, int]=None,
+                 class_names:Union[None, Sequence[str]]=None,
+                 keep_noise:bool=True,
+                 seed:Union[None, int]=None,
+                 delete_png:bool=True,
+                 duration:float=5000,
+                 **kwargs):
+        """Initialize callback.
+        
+        Args:
+            `filename`: Path to save GIF to. Defaults to `'./logs/GAN_itpl.gif'`.
+            `start_classes`: Classes at the start of interpolation along the rows, leave
+                as `None` to include all classes. Defaults to `None`.
+            `stop_classes`: Classes at the stop of interpolation along the columns, leave
+                as `None` to include all classes. Defaults to `None`.
+            `num_interpolate`: Number of interpolation. Defaults to `21`.
+            `postprocess_fn`: Post-processing function to map synthetic images back to
+                the plot range, ideally [0, 1]. Leave as `None` to skip post-processing.  
+                Defaults to `None`.
+            `latent_dim`: Dimension of latent space, leave as `None` to be parsed from
+                model. Defaults to `None`.
+            `image_dim`: Dimension of synthetic images, leave as `None` to be parsed
+                from model. Defaults to `None`.
+            `num_classes`: Number of classes, leave as `None` to be parsed from model.
+                Defaults to `None`.
+            `class_names`: Sequence of name of labels, should have length equal to total
+                number of classes. Leave as `None` for generic `'class x'` names.
+                Defaults to `None`.
+            `keep_noise`: Flag to feed the same latent noise to generator for the whole
+                training. Defaults to `True`.
+            `delete_png`: Flag to delete PNG files and folder at `filename/png` after
+                training. Defaults to `True`.
+            `duration`: Duration of the generated GIF in milliseconds.
+                Defaults to `5000`.
+        """
+        assert num_itpl > 2, (
+            '`num_interpolate` (including the left and right classes) must be' +
+            ' larger than 2.'
+        )
+        assert itpl_method in ['linspace', 'slerp'], (
+            "`itpl_method` must be 'linspace' or 'slerp'"
+        )
+
+        super(MakeInterpolateSyntheticGIFCallback, self).__init__(
+            filename=filename,
+            nrows=None,
+            ncols=None,
+            postprocess_fn=postprocess_fn,
+            normalize=normalize,
+            latent_dim=latent_dim,
+            image_dim=image_dim,
+            keep_noise=keep_noise,
+            seed=seed,
+            delete_png=delete_png,
+            duration=duration,
+            **kwargs
+        )
+        self.itpl_method = itpl_method
+        self.start_classes = start_classes
+        self.stop_classes = stop_classes
+        self.num_itpl = num_itpl
+        self.num_classes = num_classes
+        self.class_names = class_names
+        # Reset unused inherited attributes
+        self.save_freq = None
+
+    def on_epoch_end(self, epoch, logs=None):
+        # Deactivate MakeSyntheticGIFCallback.on_epoch_end()
+        pass
+    
+    def on_train_end(self, logs=None):
+        # Interpolate from start- to stop-classes
+        itpl_ratios = torch.linspace(start=0, end=1, steps=self.num_itpl, dtype=torch.float).numpy().tolist()
+        for ratio in itpl_ratios:
+            label = self._interpolate(start=self.start, stop=self.stop, ratio=ratio)
+            self.label = torch.cat(torch.split(label), axis=0)
+            x_synth = self.synthesize_images()
+            self.make_figure(x_synth, ratio)
+
+        # Make GIF
+        path_png = f'{self.path_png_folder}/*.png'
+        img, *imgs = [PIL.Image.open(f) for f in sorted(glob.glob(path_png))]
+        img.save(
+            fp=self.filename,
+            format='GIF',
+            append_images=imgs,
+            save_all=True,
+            duration=self.duration/(len(imgs) + 1),
+            loop=0)
+
+        if self.delete_png is True:
+            for png in glob.glob(path_png):
+                os.remove(png)
+            os.rmdir(self.path_png_folder)
+
+    def handle_args(self):
+        super().handle_args()
+
+        if self.host.onehot_input is None:
+            warnings.warn(
+                f'Host does not have attribute `onehot_input`. ' +
+                'Proceed with assumption that it receives one-hot encoded inputs.')
+            self.onehot_input = True
+        elif self.host.onehot_input is not None:
+            assert self.host.onehot_input is True, (
+                'Callback only works with models receiving one-hot encoded inputs.'
+            )
+            self.onehot_input = True
+
+        if self.num_classes is None:
+            self.num_classes:int = self.host.num_classes
+
+        if self.class_names is None:
+            self.class_names = [f'Class {i}' for i in range(self.num_classes)]
+
+        # Parse interpolate method, start_classes and stop_classes
+        if self.itpl_method == 'linspace':
+            self._interpolate = self.linspace
+        elif self.itpl_method == 'slerp':
+            self._interpolate = self.slerp
+
+        if self.start_classes is None:
+            self.start_classes = [label for label in range(self.num_classes)]
+        if self.stop_classes is None:
+            self.stop_classes = [label for label in range(self.num_classes)]
+
+        self.nrows = len(self.start_classes)
+        self.ncols = len(self.stop_classes)
+
+    def precompute_inputs(self):
+        super(MakeInterpolateSyntheticGIFCallback, self).precompute_inputs()
+        # Convert to one-hot labels
+        start = torch.nn.functional.one_hot(tensor=self.start_classes, num_classes=self.num_classes)
+        stop = torch.nn.functional.one_hot(tensor=self.stop_classes, num_classes=self.num_classes)
+
+        # Expand dimensions to have shape [nrows, ncols, num_classes]
+        start = torch.unsqueeze(input=start, dim=1)
+        start = torch.repeat_interleave(input=start, repeats=self.ncols, dim=1)
+        stop = torch.unsqueeze(input=stop, dim=0)
+        stop = torch.repeat_interleave(input=stop, repeats=self.nrows, dim=0)
+
+        self.start = start
+        self.stop = stop
+
+        if self.itpl_method == 'slerp':
+            # Normalize (L2) to [-1, 1] for numerical stability
+            norm_start = start/torch.linalg.norm(start, axis=-1)
+            norm_stop = stop/torch.linalg.norm(stop, axis=-1)
+
+            dotted = (norm_start*norm_stop).sum(axis=-1)
+            # Clip to [-1, 1] for numerical stability
+            clipped = torch.clamp(dotted, -1, 1)
+            omegas = torch.acos(clipped)
+            sinned = torch.sin(omegas)
+
+            # Expand dimensions to have shape [nrows, ncols, num_classes]
+            omegas = torch.unsqueeze(input=omegas, dim=-1)
+            omegas = torch.repeat_interleave(input=omegas, repeats=self.num_classes, dim=-1)
+            sinned = torch.unsqueeze(input=sinned, dim=-1)
+            sinned = torch.repeat_interleave(input=sinned, repeats=self.num_classes, dim=-1)
+            zeros_mask = (omegas == 0)
+
+            self.omegas = omegas
+            self.sinned = sinned
+            self.zeros_mask = zeros_mask
+
+    def synthesize_images(self):
+        if self.keep_noise is False:
+            batch_size = self.nrows*self.ncols
+            self.latent_noise = torch.normal(mean=0, std=1, size=[batch_size, self.latent_dim])
+                    
+        x_synth = self.host.generator([self.latent_noise, self.label])
+        x_synth = self.postprocess_fn(x_synth)
+        return x_synth
+
+    def modify_suptitle(self, figure:Figure, value:float):
+        figure.suptitle(f'{self.host.__class__.__name__} - {self.itpl_method} interpolation: {value*100:.2f}%')
+
+    def modify_axis(self, axis:Axes):
+        xticks = (self.image_dim[1] + 1)*np.arange(len(self.stop_classes)) + self.image_dim[1]/2
+        xticklabels = [self.class_names[label] for label in self.stop_classes]
+
+        yticks = (self.image_dim[0] + 1)*np.arange(len(self.start_classes)) + self.image_dim[0]/2
+        yticklabels = [self.class_names[label] for label in self.start_classes]
+        
+        axis.set_frame_on(False)
+        axis.tick_params(axis='both', length=0)
+        axis.set(
+            xlabel='Stop classes', xticks=xticks, xticklabels=xticklabels,
+            ylabel='Start classes', yticks=yticks, yticklabels=yticklabels)
+
+    def modify_savepath(self, value:float):
+        return f"{self.path_png_folder}/{self.host.__class__.__name__}_itpl_{value:.4f}.png"
+
+    def linspace(self, start, stop, ratio:float):
+        label = ((1-ratio)*start + ratio*stop)
+        return label
+    
+    def slerp(self, start, stop, ratio:float):
+        label = torch.where(
+            condition=self.zeros_mask,
+            # Normal case: omega(s) != 0
+            x=self.linspace(start=start, stop=stop, ratio=ratio),
+            # Special case: omega(s) == 0 --> Use L'Hospital's rule for sin(0)/0
+            y=(  torch.sin((1-ratio)*self.omegas) / self.sinned * start
+               + torch.sin(ratio    *self.omegas) / self.sinned * stop
+            )
+        )
+        return label

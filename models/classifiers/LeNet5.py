@@ -1,5 +1,4 @@
 from typing import List
-
 import torch
 
 class LeNet5(torch.nn.Module):
@@ -85,17 +84,16 @@ class LeNet5(torch.nn.Module):
         return x
 
 if __name__ == '__main__':
-    import torch.optim
-
     # Change path
     import os, sys
     repo_path = os.path.abspath(os.path.join(__file__, '../../..'))
     assert os.path.basename(repo_path) == 'kd_torch', "Wrong parent folder. Please change to 'kd_torch'"
-    sys.path.append(repo_path)
-
+    if sys.path[0] != repo_path:
+        sys.path.insert(0, repo_path)
+    
     from dataloader import get_dataloader
-    from models.classifiers.utils import Trainer
-    from callbacks.Callbacks import CSVLogger
+    from models.classifiers.utils import ClassifierTrainer
+    from utils.callbacks import CSVLogger
     
     def test_mnist():
         IMAGE_DIM = [1, 32, 32]
@@ -116,14 +114,11 @@ if __name__ == '__main__':
             PoolLayer=torch.nn.MaxPool2d,
         )
 
-        loss_fn = torch.nn.CrossEntropyLoss()
-        optimizer = torch.optim.Adam(params=net.parameters(), lr=1e-3)
+        trainer = ClassifierTrainer(model=net)
+        trainer.compile(
+            optimizer=torch.optim.Adam(params=net.parameters(), lr=1e-3),
+            loss_fn=torch.nn.CrossEntropyLoss())
 
-        trainer = Trainer(
-            model=net,
-            optimizer=optimizer,
-            loss_fn=loss_fn,
-        )
         csv_logger = CSVLogger(filename=f'./logs/{net.__class__.__name__}.csv', append=True)
         trainer.training_loop(
             trainloader=dataloader['train'],

@@ -1,7 +1,8 @@
 from abc import ABC
-import collections
 import csv
+import collections
 import os
+
 import numpy as np
 import tqdm.auto as tqdm
 
