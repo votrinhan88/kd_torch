@@ -195,6 +195,7 @@ class MakeSyntheticGIFCallback(Callback):
                 with torch.manual_seed(self.seed):
                     self.latent_noise = torch.normal(mean=0, std=1, size=(batch_size, self.latent_dim), device=self.device)
         
+        self.host.generator.eval()
         with torch.inference_mode():
             x_synth = self.host.generator(self.latent_noise)
             x_synth = self.postprocess_fn(x_synth)
@@ -370,9 +371,11 @@ class MakeConditionalSyntheticGIFCallback(MakeSyntheticGIFCallback):
         if self.keep_noise is False:
             batch_size = self.nrows*self.ncols
             self.latent_noise = torch.normal(mean=0, std=1, size=[batch_size, self.latent_dim], device=self.device)
-                    
-        x_synth = self.host.generator(self.latent_noise, self.label)
-        x_synth = self.postprocess_fn(x_synth)
+        
+        self.host.generator.eval()
+        with torch.inference_mode():
+            x_synth = self.host.generator(self.latent_noise, self.label)
+            x_synth = self.postprocess_fn(x_synth)
         return x_synth
 
     def modify_axis(self, axis:Axes):
@@ -598,9 +601,11 @@ class MakeInterpolateSyntheticGIFCallback(MakeSyntheticGIFCallback):
         if self.keep_noise is False:
             batch_size = self.nrows*self.ncols
             self.latent_noise = torch.normal(mean=0, std=1, size=[batch_size, self.latent_dim])
-                    
-        x_synth = self.host.generator(self.latent_noise, self.label)
-        x_synth = self.postprocess_fn(x_synth)
+        
+        self.host.generator.eval()
+        with torch.inference_mode():
+            x_synth = self.host.generator(self.latent_noise, self.label)
+            x_synth = self.postprocess_fn(x_synth)
         return x_synth
 
     def modify_suptitle(self, figure:Figure, value:float):
