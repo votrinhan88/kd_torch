@@ -114,11 +114,12 @@ if __name__ == '__main__':
     from torchinfo import summary
     from utils.dataloader import get_dataloader
     from models.classifiers.utils import ClassifierTrainer
-    from utils.callbacks import CSVLogger
+    from utils.callbacks import CSVLogger, ModelCheckpoint
 
-    def test_mnist():
+    def test_mnist(run):
         IMAGE_DIM = [1, 28, 28]
         NUM_CLASSES = 10
+        LEARNING_RATE = 1e-3
         NUM_EPOCHS = 10
         BATCH_SIZE = 64
 
@@ -137,16 +138,26 @@ if __name__ == '__main__':
 
         trainer = ClassifierTrainer(model=net)
         trainer.compile(
-            optimizer=torch.optim.Adam(params=net.parameters(), lr=1e-3),
+            optimizer=torch.optim.Adam(params=net.parameters(), lr=LEARNING_RATE),
             loss_fn=torch.nn.CrossEntropyLoss()
         )
         csv_logger = CSVLogger(filename=f'./logs/{net.__class__.__name__}.csv', append=True)
+        best_callback = ModelCheckpoint(
+            target=net,
+            filepath=f'./logs/{net.__class__.__name__}_run_{run}.pt',
+            monitor='val_acc',
+            save_best_only=True,
+            save_state_dict_only=True,
+            initial_value_threshold=0.96,
+        )
+
         weight_constraint = MaxNormConstraint()
         trainer.training_loop(
             trainloader=dataloader['train'],
             num_epochs=NUM_EPOCHS,
             valloader=dataloader['val'],
-            callbacks=[csv_logger, weight_constraint],
+            callbacks=[csv_logger, weight_constraint, best_callback],
         )
 
-    test_mnist()
+    for run in range(5):
+        test_mnist(run)

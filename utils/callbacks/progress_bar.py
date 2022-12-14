@@ -7,6 +7,10 @@ class ProgressBar(Callback):
         self.kwargs = self.host.training_loop_kwargs
         self.host.training_progress = tqdm.tqdm(range(self.kwargs['num_epochs']), desc='Training', unit='epochs')
 
+    def on_test_begin(self, logs=None):
+        self.kwargs = self.host.evaluate_kwargs
+        self.host.val_phase_progress = tqdm.tqdm(self.kwargs['valloader'], desc='Evaluating', unit='batches')
+    
     def on_epoch_train_end(self, epoch:int, logs=None):
         self.host.training_progress.set_postfix({k: f'{v:.4g}' for (k, v) in logs.items()})
 

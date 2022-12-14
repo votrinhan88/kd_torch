@@ -155,7 +155,7 @@ if __name__ == '__main__':
         dataloader = get_dataloader(
             dataset='MNIST',
             rescale=[-1, 1],
-            batch_size_train=NUM_EPOCHS,
+            batch_size_train=BATCH_SIZE,
         )
 
         net = AlexNet(input_dim=IMAGE_DIM, num_classes=NUM_CLASSES)

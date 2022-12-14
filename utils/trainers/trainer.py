@@ -19,15 +19,15 @@ class Trainer(ABC):
 
     @abstractmethod
     def compile(self):
-        # Metrics
-        self.train_metrics:Dict[str, Metric] = {}
-        self.val_metrics:Dict[str, Metric] = {}
         # To be initialize by callback History
         self.history:History
         # To be initialize by callback ProgressBar
         self.training_progress:tqdm = None
         self.train_phase_progress:tqdm = None
         self.val_phase_progress:tqdm = None
+        # Metrics
+        self.train_metrics:Dict[str, Metric] = {}
+        self.val_metrics:Dict[str, Metric] = {}
 
     def training_loop(self,
                       trainloader:DataLoader,
@@ -47,7 +47,7 @@ class Trainer(ABC):
         
         for epoch in self.training_progress:
             epoch_logs = {}
-            self.on_epoch_begin(epoch_logs, logs)
+            self.on_epoch_begin(epoch, epoch_logs)
             
             # Training phase
             for batch, data in enumerate(self.train_phase_progress):
@@ -63,7 +63,7 @@ class Trainer(ABC):
             if valloader is not None:
                 self.on_epoch_test_begin(epoch, epoch_logs)
                 for batch, data in enumerate(self.val_phase_progress):
-                    batch_logs = {}
+                    batch_logs = {} 
                     self.on_test_batch_begin(batch, batch_logs)
                     self.test_batch(data)
                     batch_logs.update({k:v.latest for (k, v) in self.val_metrics.items()})
@@ -74,6 +74,30 @@ class Trainer(ABC):
         logs.update(epoch_logs)
         self.on_train_end(logs)
 
+        return self.history
+
+    def evaluate(self,
+                 valloader:DataLoader,
+                 callbacks:Optional[List[Callback]]=None):
+        self.evaluate_kwargs = {'valloader':valloader}
+
+        self.hook_callbacks(callbacks=callbacks)
+        logs = {}
+        self.on_test_begin(logs)
+
+        # Validation phase
+        epoch_logs = {}
+        for batch, data in enumerate(self.val_phase_progress):
+            batch_logs = {}
+            self.on_test_batch_begin(batch, batch_logs)
+            self.test_batch(data)
+            batch_logs.update({k:v.latest for (k, v) in self.val_metrics.items()})
+            self.on_test_batch_end(batch, batch_logs)
+        epoch_logs.update({f'val_{key}': value for key, value in batch_logs.items()})
+        
+        logs.update(epoch_logs)
+        self.on_test_end(logs)
+        
         return self.history
 
     @abstractmethod
@@ -96,6 +120,14 @@ class Trainer(ABC):
     def on_train_end(self, logs=None):
         for cb in self.callbacks:
             cb.on_train_end(logs)
+
+    def on_test_begin(self, logs=None):
+        for cb in self.callbacks:
+            cb.on_test_begin(logs)
+
+    def on_test_end(self, logs=None):
+        for cb in self.callbacks:
+            cb.on_test_end(logs)
 
     def on_epoch_begin(self, epoch:int, logs=None):
         for cb in self.callbacks:

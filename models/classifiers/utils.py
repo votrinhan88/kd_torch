@@ -26,8 +26,8 @@ class ClassifierTrainer(Trainer):
         self.loss_fn = loss_fn
 
         # Metrics
-        self.train_metrics = {'loss': Mean(), 'accuracy': CategoricalAccuracy()}
-        self.val_metrics = {'loss': Mean(), 'accuracy': CategoricalAccuracy()}
+        self.train_metrics = {'loss': Mean(), 'acc': CategoricalAccuracy()}
+        self.val_metrics = {'loss': Mean(), 'acc': CategoricalAccuracy()}
 
     def train_batch(self, data:Tuple[torch.Tensor, torch.Tensor]):
         # Unpack data
@@ -45,7 +45,7 @@ class ClassifierTrainer(Trainer):
         with torch.inference_mode():
             # Metrics
             self.train_metrics['loss'].update(new_entry=loss)
-            self.train_metrics['accuracy'].update(label=label, prediction=prediction)
+            self.train_metrics['acc'].update(label=label, prediction=prediction)
 
     def test_batch(self, data:Tuple[torch.Tensor, torch.Tensor]):
         # Unpack data
@@ -59,4 +59,4 @@ class ClassifierTrainer(Trainer):
             loss = self.loss_fn(prediction, label)
             # Metrics
             self.val_metrics['loss'].update(new_entry=loss)
-            self.val_metrics['accuracy'].update(label=label, prediction=prediction)
+            self.val_metrics['acc'].update(label=label, prediction=prediction)

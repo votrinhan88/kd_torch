@@ -1,9 +1,11 @@
 from .callback import Callback
-from .csvlogger import CSVLogger
+from .csv_logger import CSVLogger
 from .history import History
-from .progressbar import ProgressBar
+from .progress_bar import ProgressBar
+from .model_checkpoint import ModelCheckpoint
 
 del callback
-del csvlogger
+del csv_logger
 del history
-del progressbar
+del progress_bar
+del model_checkpoint
