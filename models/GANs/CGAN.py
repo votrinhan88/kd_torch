@@ -362,7 +362,8 @@ class CGAN(GAN):
                  latent_dim:Optional[int]=None,
                  image_dim:Optional[Sequence[int]]=None,
                  num_classes:Union[None, int]=None,
-                 onehot_input:Union[None, bool]=None):
+                 onehot_input:Union[None, bool]=None,
+                 device:Optional[str]=None):
         """Initialize cGAN.
         
         Args:
@@ -379,7 +380,8 @@ class CGAN(GAN):
             generator=generator,
             critic=critic,
             latent_dim=latent_dim,
-            image_dim=image_dim
+            image_dim=image_dim,
+            device=device,
         )
 
         if num_classes is None:
@@ -440,7 +442,7 @@ class CGAN(GAN):
             self.train_metrics['loss_synth'].update(new_entry=loss_synth)
             self.train_metrics['loss_gen'].update(new_entry=loss_gen)
 
-    def test_step(self, data):
+    def test_batch(self, data):
         # Unpack data
         x_real, label = data
         x_real = x_real.to(self.device)
