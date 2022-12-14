@@ -11,7 +11,7 @@ import torch
 import numpy as np
 
 from models.GANs.GAN import GAN
-from models.GANs.utils import Reshape
+from utils.modules import Reshape
 
 class DC_Generator(torch.nn.Module):
     """Generator for DCGAN.
@@ -176,12 +176,14 @@ if __name__ == '__main__':
         LATENT_DIM = 100
         IMAGE_DIM = [1, 28, 28]
         BASE_DIM = [256, 7, 7]
-        NUM_EPOCHS = 20
+        BATCH_SIZE = 128
+        NUM_EPOCHS = 50
 
         dataloader = get_dataloader(
             dataset='MNIST',
             resize=IMAGE_DIM[1:],
             rescale=[-1, 1],
+            batch_size_train=BATCH_SIZE
         )
 
         gen = DC_Generator(
@@ -190,11 +192,13 @@ if __name__ == '__main__':
             base_dim=BASE_DIM)
         crit = DC_Discriminator(
             image_dim=IMAGE_DIM,
-            return_logits=False)
+            base_dim=BASE_DIM,
+            return_logits=False
+        )
 
-        summary(model=gen, input_size=[128, LATENT_DIM])
-        summary(model=crit, input_size=[128, *IMAGE_DIM])
-        
+        summary(model=gen, input_size=[BATCH_SIZE, LATENT_DIM])
+        summary(model=crit, input_size=[BATCH_SIZE, *IMAGE_DIM])
+
         gan = DCGAN(generator=gen, critic=crit)
         gan.compile(
             optimizer_gen=torch.optim.Adam(params=gen.parameters(), lr=2e-4, betas=(0.5, 0.999)),

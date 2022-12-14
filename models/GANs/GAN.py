@@ -164,12 +164,13 @@ class GAN(Trainer):
         x_real, _ = data
         x_real = x_real.to(self.device)
         batch_size = x_real.shape[0]
-        y_synth = torch.zeros(size=(batch_size, 1))
-        y_real = torch.ones(size=(batch_size, 1))
+        y_synth = torch.zeros(size=(batch_size, 1), device=self.device)
+        y_real = torch.ones(size=(batch_size, 1), device=self.device)
 
-        # Phase 1 - Training the critic (discriminator)
-        self.generator.eval()
+        # Setting generator and critic to train mode for more stable training
+        self.generator.train()
         self.critic.train()
+        # Phase 1 - Training the critic (discriminator)
         self.optimizer_crit.zero_grad()
         ## Forward
         x_synth = self.synthesize_images(batch_size)
@@ -183,8 +184,6 @@ class GAN(Trainer):
         self.optimizer_crit.step()
 
         # Phase 2 - Training the generator
-        self.generator.train()
-        self.critic.eval()
         self.optimizer_gen.zero_grad()
         ## Forward
         x_synth = self.synthesize_images(batch_size)
@@ -205,8 +204,8 @@ class GAN(Trainer):
         x_real, _ = data
         x_real = x_real.to(self.device)
         batch_size:int = x_real.shape[0]
-        y_synth = torch.zeros(size=(batch_size, 1))
-        y_real = torch.ones(size=(batch_size, 1))
+        y_synth = torch.zeros(size=(batch_size, 1), device=self.device)
+        y_real = torch.ones(size=(batch_size, 1), device=self.device)
 
         self.generator.eval()
         self.critic.eval()
@@ -221,7 +220,7 @@ class GAN(Trainer):
             self.val_metrics['acc_synth'].update(label=y_synth, prediction=pred_synth)
 
     def synthesize_images(self, batch_size):
-        latent_noise = torch.normal(mean=0, std=1, size=[batch_size, self.latent_dim])
+        latent_noise = torch.normal(mean=0, std=1, size=[batch_size, self.latent_dim], device=self.device)
         x_synth = self.generator(latent_noise)
         return x_synth
 
@@ -235,7 +234,8 @@ if __name__ == '__main__':
     def test_mnist():
         LATENT_DIM = 100
         IMAGE_DIM = [1, 28, 28]
-        NUM_EPOCHS = 20
+        BATCH_SIZE = 128
+        NUM_EPOCHS = 50
 
         dataloader = get_dataloader(
             dataset='MNIST',

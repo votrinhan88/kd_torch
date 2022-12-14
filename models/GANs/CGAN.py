@@ -409,9 +409,10 @@ class CGAN(GAN):
         y_synth = torch.zeros(size=(batch_size, 1), device=self.device)
         y_real = torch.ones(size=(batch_size, 1), device=self.device)
 
-        # Phase 1 - Training the discriminator
-        self.generator.eval()
+        # Setting generator and critic to train mode for more stable training
+        self.generator.train()
         self.critic.train()
+        # Phase 1 - Training the discriminator
         self.optimizer_crit.zero_grad()
         # Forward
         x_synth = self.synthesize_images(label, batch_size)
@@ -425,14 +426,12 @@ class CGAN(GAN):
         self.optimizer_crit.step()
 
         # Phase 2 - Training the generator
-        self.generator.train()
-        self.critic.eval()
         self.optimizer_gen.zero_grad()
         ## Forward
         x_synth = self.synthesize_images(label, batch_size)
         pred_synth = self.critic(x_synth, label)
         loss_gen = self.loss_fn(pred_synth, y_real)
-        # Back-propagation
+        ## Back-propagation
         loss_gen.backward()
         self.optimizer_gen.step()
 
@@ -480,10 +479,10 @@ if __name__ == '__main__':
         LATENT_DIM = 100
         IMAGE_DIM = [1, 28, 28]
         BASE_DIM = [256, 7, 7]
-        EMBED_DIM = 50
+        EMBED_DIM = None
         NUM_CLASSES = 10
         BATCH_SIZE = 128
-        NUM_EPOCHS = 20
+        NUM_EPOCHS = 50
 
         dataloader = get_dataloader(
             dataset='MNIST',
@@ -527,10 +526,9 @@ if __name__ == '__main__':
             filename=f'./logs/{gan.__class__.__name__}.gif',
             postprocess_fn=lambda x:(x+1)/2,
             class_names=dataloader['train'].dataset.classes
-
         )
         slerper = MakeInterpolateSyntheticGIFCallback(
-            filename=f'./logs/{gan.__class__.__name__}.gif',
+            filename=f'./logs/{gan.__class__.__name__}_slerp.gif',
             itpl_method='slerp',
             postprocess_fn=lambda x:(x+1)/2,
             class_names=dataloader['train'].dataset.classes
@@ -540,7 +538,7 @@ if __name__ == '__main__':
             trainloader=dataloader['train'],
             num_epochs=NUM_EPOCHS,
             valloader=dataloader['val'],
-            callbacks=[csv_logger, gif_maker, slerper],
+            callbacks=[csv_logger, gif_maker],
         )
     
     test_mnist()
@@ -550,7 +548,7 @@ if __name__ == '__main__':
         IMAGE_DIM = [28, 28, 1]
         BASE_DIM = [7, 7, 256]
         NUM_CLASSES = 10
-        BATCH_SIZE = 256
+        BATCH_SIZE = 64
 
         OPTIMIZER_GEN = keras.optimizers.Adam(learning_rate=1e-4, beta_1=0.5)
         OPTIMIZER_DISC = keras.optimizers.Adam(learning_rate=1e-4, beta_1=0.5)
