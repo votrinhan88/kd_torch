@@ -461,6 +461,11 @@ class CGAN(GAN):
             self.val_metrics['acc_real'].update(label=y_real, prediction=pred_real)
             self.val_metrics['acc_synth'].update(label=y_synth, prediction=pred_synth)
 
+    def synthesize_images(self, label, batch_size):
+        latent_noise = torch.normal(mean=0, std=1, size=[batch_size, self.latent_dim])
+        x_synth = self.generator(latent_noise, label)
+        return x_synth
+
 if __name__ == '__main__':
     from torchinfo import summary
 
@@ -472,19 +477,39 @@ if __name__ == '__main__':
     def test_mnist():
         LATENT_DIM = 100
         IMAGE_DIM = [1, 28, 28]
+        BASE_DIM = [256, 7, 7]
+        EMBED_DIM = 50
+        NUM_CLASSES = 10
+        BATCH_SIZE = 128
         NUM_EPOCHS = 20
 
         dataloader = get_dataloader(
             dataset='MNIST',
             resize=IMAGE_DIM[1:],
             rescale=[-1, 1],
+            batch_size_train=BATCH_SIZE,
+            onehot_label=True
         )
 
-        gen = ConditionalGenerator(latent_dim=LATENT_DIM, image_dim=IMAGE_DIM)
-        crit = ConditionalDiscriminator(image_dim=IMAGE_DIM, return_logits=False)
+        gen = ConditionalGenerator(
+            latent_dim=LATENT_DIM,
+            image_dim=IMAGE_DIM,
+            base_dim=BASE_DIM,
+            embed_dim=EMBED_DIM,
+            num_classes=NUM_CLASSES,
+            onehot_input=True
+        )
+        crit = ConditionalDiscriminator(
+            image_dim=IMAGE_DIM,
+            base_dim=BASE_DIM,
+            embed_dim=EMBED_DIM,
+            num_classes=NUM_CLASSES,
+            onehot_input=True,
+            return_logits=False,
+        )
         
-        summary(model=gen, input_size=[128, LATENT_DIM])
-        summary(model=crit, input_size=[128, *IMAGE_DIM])
+        summary(model=gen, input_size=[[BATCH_SIZE, LATENT_DIM], [BATCH_SIZE, NUM_CLASSES]])
+        summary(model=crit, input_size=[[BATCH_SIZE, *IMAGE_DIM], [BATCH_SIZE, NUM_CLASSES]])
         
         gan = CGAN(generator=gen, critic=crit)
         gan.compile(
@@ -498,14 +523,22 @@ if __name__ == '__main__':
         )
         gif_maker = MakeConditionalSyntheticGIFCallback(
             filename=f'./logs/{gan.__class__.__name__}.gif',
-            nrows=5, ncols=5,
-            postprocess_fn=lambda x:(x+1)/2
+            postprocess_fn=lambda x:(x+1)/2,
+            class_names=dataloader['train'].dataset.classes
+
+        )
+        slerper = MakeInterpolateSyntheticGIFCallback(
+            filename=f'./logs/{gan.__class__.__name__}.gif',
+            itpl_method='slerp',
+            postprocess_fn=lambda x:(x+1)/2,
+            class_names=dataloader['train'].dataset.classes
+
         )
         gan.training_loop(
             trainloader=dataloader['train'],
             num_epochs=NUM_EPOCHS,
             valloader=dataloader['val'],
-            callbacks=[csv_logger, gif_maker],
+            callbacks=[csv_logger, gif_maker, slerper],
         )
     
     test_mnist()
