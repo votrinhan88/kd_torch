@@ -135,7 +135,7 @@ class MakeSyntheticGIFCallback(Callback):
     def on_epoch_end(self, epoch, logs=None):
         x_synth = self.synthesize_images()
         if epoch % self.save_freq == 0:
-            self.make_figure(x_synth.clone().detach(), epoch)
+            self.make_figure(x_synth.clone().detach().to('cpu'), epoch)
 
     def on_train_end(self, logs=None):
         # Make GIF
@@ -176,10 +176,10 @@ class MakeSyntheticGIFCallback(Callback):
         """
         batch_size = self.nrows*self.ncols
         if self.seed is None:
-            self.latent_noise = torch.normal(mean=0, std=1, size=(batch_size, self.latent_dim))
+            self.latent_noise = torch.normal(mean=0, std=1, size=(batch_size, self.latent_dim), device=self.device)
         elif self.seed is not None:
             with torch.manual_seed(self.seed):
-                self.latent_noise = torch.normal(mean=0, std=1, size=(batch_size, self.latent_dim))
+                self.latent_noise = torch.normal(mean=0, std=1, size=(batch_size, self.latent_dim), device=self.device)
 
     def synthesize_images(self) -> torch.Tensor:
         """Produce synthetic images with the generator.
@@ -190,10 +190,10 @@ class MakeSyntheticGIFCallback(Callback):
         if self.keep_noise is False:
             batch_size = self.nrows*self.ncols
             if self.seed is None:
-                self.latent_noise = torch.normal(mean=0, std=1, size=(batch_size, self.latent_dim))
+                self.latent_noise = torch.normal(mean=0, std=1, size=(batch_size, self.latent_dim), device=self.device)
             elif self.seed is not None:
                 with torch.manual_seed(self.seed):
-                    self.latent_noise = torch.normal(mean=0, std=1, size=(batch_size, self.latent_dim))
+                    self.latent_noise = torch.normal(mean=0, std=1, size=(batch_size, self.latent_dim), device=self.device)
         
         with torch.inference_mode():
             x_synth = self.host.generator(self.latent_noise)
@@ -361,16 +361,17 @@ class MakeConditionalSyntheticGIFCallback(MakeSyntheticGIFCallback):
     def precompute_inputs(self):
         super().precompute_inputs()
 
-        self.label = torch.tensor(self.target_classes, dtype=torch.long).repeat([self.nrows])
+        self.label = torch.tensor(self.target_classes, dtype=torch.long, device=self.device).repeat([self.nrows])
         if self.onehot_input is True:
             self.label = torch.nn.functional.one_hot(input=self.label, num_classes=self.num_classes)
+        self.label = self.label.to(dtype=torch.float)
 
     def synthesize_images(self):
         if self.keep_noise is False:
             batch_size = self.nrows*self.ncols
-            self.latent_noise = torch.normal(mean=0, std=1, size=[batch_size, self.latent_dim])   
+            self.latent_noise = torch.normal(mean=0, std=1, size=[batch_size, self.latent_dim], device=self.device)
                     
-        x_synth = self.host.generator([self.latent_noise, self.label])
+        x_synth = self.host.generator(self.latent_noise, self.label)
         x_synth = self.postprocess_fn(x_synth)
         return x_synth
 
@@ -598,7 +599,7 @@ class MakeInterpolateSyntheticGIFCallback(MakeSyntheticGIFCallback):
             batch_size = self.nrows*self.ncols
             self.latent_noise = torch.normal(mean=0, std=1, size=[batch_size, self.latent_dim])
                     
-        x_synth = self.host.generator([self.latent_noise, self.label])
+        x_synth = self.host.generator(self.latent_noise, self.label)
         x_synth = self.postprocess_fn(x_synth)
         return x_synth
 

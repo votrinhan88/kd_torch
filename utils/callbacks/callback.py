@@ -4,6 +4,7 @@ class Callback(ABC):
     """Base class for callbacks."""
     def hook(self, host):
         self.host = host
+        self.device = self.host.device
         
     def on_train_begin(self, logs=None): return
     def on_train_end(self, logs=None): return
