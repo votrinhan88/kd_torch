@@ -361,9 +361,9 @@ class MakeConditionalSyntheticGIFCallback(MakeSyntheticGIFCallback):
     def precompute_inputs(self):
         super().precompute_inputs()
 
-        self.label = torch.Tensor(self.target_classes).repeat([self.nrows])
+        self.label = torch.tensor(self.target_classes, dtype=torch.long).repeat([self.nrows])
         if self.onehot_input is True:
-            self.label = torch.nn.functional.one_hot(tensor=self.label, num_classes=self.num_classes)
+            self.label = torch.nn.functional.one_hot(input=self.label, num_classes=self.num_classes)
 
     def synthesize_images(self):
         if self.keep_noise is False:
@@ -550,15 +550,17 @@ class MakeInterpolateSyntheticGIFCallback(MakeSyntheticGIFCallback):
             self.start_classes = [label for label in range(self.num_classes)]
         if self.stop_classes is None:
             self.stop_classes = [label for label in range(self.num_classes)]
+        self.start_classes = torch.tensor(self.start_classes, dtype=torch.long)
+        self.stop_classes = torch.tensor(self.stop_classes, dtype=torch.long)
 
-        self.nrows = len(self.start_classes)
-        self.ncols = len(self.stop_classes)
+        self.nrows = self.start_classes.shape[0]
+        self.ncols = self.stop_classes.shape[0]
 
     def precompute_inputs(self):
         super(MakeInterpolateSyntheticGIFCallback, self).precompute_inputs()
         # Convert to one-hot labels
-        start = torch.nn.functional.one_hot(tensor=self.start_classes, num_classes=self.num_classes)
-        stop = torch.nn.functional.one_hot(tensor=self.stop_classes, num_classes=self.num_classes)
+        start = torch.nn.functional.one_hot(input=self.start_classes, num_classes=self.num_classes).to(dtype=torch.float)
+        stop = torch.nn.functional.one_hot(input=self.stop_classes, num_classes=self.num_classes).to(dtype=torch.float)
 
         # Expand dimensions to have shape [nrows, ncols, num_classes]
         start = torch.unsqueeze(input=start, dim=1)
