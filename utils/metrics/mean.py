@@ -6,6 +6,8 @@ class Mean(Metric):
         self.reset()
 
     def update(self, new_entry:torch.Tensor) -> torch.Tensor:
+        new_entry = new_entry.to('cpu')
+
         self.step += 1
         self.accum_value += new_entry
         self.value = self.accum_value/self.step

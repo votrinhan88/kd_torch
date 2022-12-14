@@ -6,6 +6,9 @@ class BinaryAccuracy(Metric):
         self.reset()
     
     def update(self, label:torch.Tensor, prediction:torch.Tensor):
+        label = label.to('cpu')
+        prediction = prediction.to('cpu')
+
         # `prediction` must be probability
         pred_label = (prediction >= 0.5).to(dtype=torch.float)
         self.num_observed += label.shape[0]

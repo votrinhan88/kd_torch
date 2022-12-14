@@ -406,8 +406,8 @@ class CGAN(GAN):
         x_real = x_real.to(self.device)
         label = label.to(self.device)
         batch_size = x_real.shape[0]
-        y_synth = torch.zeros(size=(batch_size, 1))
-        y_real = torch.ones(size=(batch_size, 1))
+        y_synth = torch.zeros(size=(batch_size, 1), device=self.device)
+        y_real = torch.ones(size=(batch_size, 1), device=self.device)
 
         # Phase 1 - Training the discriminator
         self.generator.eval()
@@ -448,9 +448,9 @@ class CGAN(GAN):
         x_real = x_real.to(self.device)
         label = label.to(self.device)
         batch_size = x_real.shape[0]
-        y_synth = torch.zeros(size=(batch_size, 1))
-        y_real = torch.ones(size=(batch_size, 1))
-
+        y_synth = torch.zeros(size=(batch_size, 1), device=self.device)
+        y_real = torch.ones(size=(batch_size, 1), device=self.device)
+        
         self.generator.eval()
         self.critic.eval()
         with torch.inference_mode():
@@ -458,13 +458,13 @@ class CGAN(GAN):
             pred_real = self.critic(x_real, label)
             # Test 2 - Generator tries to fool discriminator
             x_synth = self.synthesize_images(label, batch_size)
-            pred_synth = self.critic(label, x_synth)
+            pred_synth = self.critic(x_synth, label)
             # Metrics
             self.val_metrics['acc_real'].update(label=y_real, prediction=pred_real)
             self.val_metrics['acc_synth'].update(label=y_synth, prediction=pred_synth)
 
     def synthesize_images(self, label, batch_size):
-        latent_noise = torch.normal(mean=0, std=1, size=[batch_size, self.latent_dim])
+        latent_noise = torch.normal(mean=0, std=1, size=[batch_size, self.latent_dim], device=self.device)
         x_synth = self.generator(latent_noise, label)
         return x_synth
 

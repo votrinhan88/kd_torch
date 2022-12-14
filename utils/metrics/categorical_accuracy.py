@@ -6,6 +6,9 @@ class CategoricalAccuracy(Metric):
         self.reset()
     
     def update(self, label:torch.Tensor, prediction:torch.Tensor):
+        label = label.to('cpu')
+        prediction = prediction.to('cpu')
+
         # `prediction` can be probability or logits
         pred_label = prediction.argmax(dim=1)
         self.num_observed += label.shape[0]
