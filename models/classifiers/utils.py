@@ -5,9 +5,10 @@ assert os.path.basename(repo_path) == 'kd_torch', "Wrong parent folder. Please c
 if sys.path[0] != repo_path:
     sys.path.insert(0, repo_path)
 
-from typing import Callable, Tuple, Optional, Any
+from typing import Any, Callable, Optional, Tuple
 import torch
-from utils.trainer import Trainer
+
+from utils.trainers import Trainer
 from utils.metrics import Mean, CategoricalAccuracy
 
 class ClassifierTrainer(Trainer):

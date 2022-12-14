@@ -1,4 +1,4 @@
-from typing import List
+from typing import Sequence
 import torch
 
 class LeNet5(torch.nn.Module):
@@ -16,7 +16,7 @@ class LeNet5(torch.nn.Module):
     '''
     def __init__(self,
                  half_size:bool=False,
-                 input_dim:List[int]=[1, 32, 32],
+                 input_dim:Sequence[int]=[1, 32, 32],
                  num_classes:int=10,
                  ActivationLayer=torch.nn.Tanh,
                  PoolLayer=torch.nn.AvgPool2d,
@@ -91,8 +91,8 @@ if __name__ == '__main__':
     if sys.path[0] != repo_path:
         sys.path.insert(0, repo_path)
     
-    from dataloader import get_dataloader
     from models.classifiers.utils import ClassifierTrainer
+    from utils.dataloader import get_dataloader
     from utils.callbacks import CSVLogger
     
     def test_mnist():

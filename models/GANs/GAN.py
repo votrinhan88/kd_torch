@@ -10,9 +10,9 @@ from typing import Sequence, Tuple, Any, Callable, Optional
 import torch
 import numpy as np
 
-from models.classifiers.utils import Trainer
+from utils.trainers import Trainer
+from utils.modules import Reshape
 from utils.metrics import Mean, BinaryAccuracy
-from models.GANs.utils import Reshape, MakeSyntheticGIFCallback
 
 class Generator(torch.nn.Module):
     """Generator for Generative Adversarial Networks.
@@ -228,7 +228,7 @@ class GAN(Trainer):
 if __name__ == '__main__':
     from torchinfo import summary
 
-    from dataloader import get_dataloader
+    from utils.dataloader import get_dataloader
     from utils.callbacks import CSVLogger
     from models.GANs.utils import MakeSyntheticGIFCallback
     

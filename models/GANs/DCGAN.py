@@ -168,7 +168,7 @@ class DCGAN(GAN):
 
 if __name__ == '__main__':
     from torchinfo import summary
-    from dataloader import get_dataloader
+    from utils.dataloader import get_dataloader
     from utils.callbacks import CSVLogger
     from models.GANs.utils import MakeSyntheticGIFCallback
 

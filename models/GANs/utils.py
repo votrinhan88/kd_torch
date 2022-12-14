@@ -18,30 +18,6 @@ import numpy as np
 
 from utils.callbacks import Callback
 
-class Reshape(torch.nn.Module):
-    def __init__(self, out_shape:Sequence[int]):
-        super().__init__()
-        self.out_shape = out_shape
-    
-    def forward(self, x:torch.Tensor) -> torch.Tensor:
-        return x.view([-1, *self.out_shape])
-
-class OneHotEncoding(torch.nn.Module):
-    def __init__(self, num_classes:int, dtype:torch.dtype=torch.float):
-        super().__init__()
-        self.num_classes = num_classes
-        self.dtype = dtype
-    
-    def forward(self, x:torch.Tensor) -> torch.Tensor:
-        x = torch.nn.functional.one_hot(x.long(), num_classes=self.num_classes)
-        x = x.squeeze(dim=-2)
-        x = x.to(dtype=self.dtype)
-        return x
-
-class Concatenate(torch.nn.Module):
-    def forward(self, tensors:Sequence[torch.Tensor]) -> torch.Tensor:
-        return torch.cat(tensors, dim=1)
-
 class Repeat2d(torch.nn.Module):
     """Repeats the input based on given size.
 

@@ -140,10 +140,11 @@ if __name__ == '__main__':
     if sys.path[0] != repo_path:
         sys.path.insert(0, repo_path)
 
-    from torchinfo import summary 
-    from dataloader import get_dataloader
+    from torchinfo import summary
+    
     from models.classifiers.utils import ClassifierTrainer
     from utils.callbacks import CSVLogger
+    from utils.dataloader import get_dataloader
 
     def test_mnist():
         IMAGE_DIM = [1, 28, 28]

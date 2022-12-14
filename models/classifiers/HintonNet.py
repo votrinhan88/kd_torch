@@ -112,7 +112,7 @@ class MaxNormConstraint(Callback):
 
 if __name__ == '__main__':
     from torchinfo import summary
-    from dataloader import get_dataloader
+    from utils.dataloader import get_dataloader
     from models.classifiers.utils import ClassifierTrainer
     from utils.callbacks import CSVLogger
 

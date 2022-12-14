@@ -11,7 +11,8 @@ import torch
 import numpy as np
 
 from models.GANs.GAN import GAN
-from models.GANs.utils import Reshape, OneHotEncoding, Concatenate, Repeat2d
+from models.GANs.utils import Repeat2d
+from utils.modules import Reshape, OneHotEncoding, Concatenate
 
 class ConditionalGenerator(torch.nn.Module):
     def __init__(self,
@@ -463,7 +464,7 @@ class CGAN(GAN):
 if __name__ == '__main__':
     from torchinfo import summary
 
-    from dataloader import get_dataloader
+    from utils.dataloader import get_dataloader
     # from models.distillers.CDAFL import ConditionalDataFreeGenerator, ConditionalLenet5_ReLU_MaxPool, ConditionalResNet_DAFL
     from utils.callbacks import CSVLogger
     from models.GANs.utils import MakeConditionalSyntheticGIFCallback, MakeInterpolateSyntheticGIFCallback

@@ -1,10 +1,3 @@
-# Change path
-import os, sys
-repo_path = os.path.abspath(os.path.join(__file__, '../../..'))
-assert os.path.basename(repo_path) == 'kd_torch', "Wrong parent folder. Please change to 'kd_torch'"
-if sys.path[0] != repo_path:
-    sys.path.insert(0, repo_path)
-
 from abc import ABC, abstractmethod
 from typing import Sequence, Optional, Dict, List
 
