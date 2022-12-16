@@ -325,7 +325,7 @@ if __name__ == '__main__':
             )
             
             teacher.load_state_dict(torch.load(
-                f=f'./logs/{teacher.__class__.__name__}_best.pt',
+                f=f'./pretrained/MNIST - standardization/LeNet5_ReLU_MaxPool_9914.pt',
                 map_location=trainer.device,
             ))
         trainer.evaluate(dataloader['val'])
