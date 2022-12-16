@@ -1,4 +1,5 @@
 from collections import OrderedDict
+from typing import Tuple, Union
 
 import torch
 
@@ -18,13 +19,14 @@ class PlaceholderDataset(torch.utils.data.Dataset):
     def __getitem__(self, index):
         return (torch.zeros([self.batch_size, 1]), torch.zeros([self.batch_size, 1]))
 
-class IntermediateFeatureExtractor:
+class IntermediateFeatureExtractor(torch.nn.Module):
     def __init__(
         self,
         model:torch.nn.Module,
-        out_layers:OrderedDict[str, torch.nn.Module],
+        out_layers:dict[str, torch.nn.Module],
         with_output=True,
-    ):
+    ):  
+        super().__init__()
         self.model = model
         self.out_layers = out_layers
         self.with_output = with_output
@@ -44,7 +46,7 @@ class IntermediateFeatureExtractor:
             h = layer.register_forward_hook(hook)
             self.handles[key] = h
 
-    def __call__(self, *args, **kwargs):
+    def __call__(self, *args, **kwargs) -> Union[Tuple[dict, torch.Tensor], torch.Tensor]:
         self.features = OrderedDict({k: None for k in self.out_layers.keys()})
         output = self.model(*args, **kwargs)
         
