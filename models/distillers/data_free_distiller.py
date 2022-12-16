@@ -258,7 +258,7 @@ if __name__ == '__main__':
     from utils.callbacks import CSVLogger, ModelCheckpoint
     from models.GANs.utils import MakeSyntheticGIFCallback
 
-    def test_mnist(pretrained_teacher:bool=True, skip_baseline:bool=True):
+    def expt_mnist(pretrained_teacher:bool=True, skip_baseline:bool=True):
         # Experiment 4.1: Classification result on the MNIST dataset
         #                                       LeNet-5        HintonNets
         # Teacher:                              LeNet-5        Hinton-784-1200-1200-10
@@ -279,11 +279,11 @@ if __name__ == '__main__':
         print(' Experiment 4.1: DAFL on MNIST. Teacher: LeNet-5, student: LeNet-5-HALF '.center(80,'#'))
         
         dataloader = get_dataloader(
-            dataset='mnist',
+            dataset='MNIST',
             resize=IMAGE_DIM[0:-1],
             rescale='standardization',
             batch_size_train=BATCH_SIZE_TEACHER,
-            batch_size_test=1024
+            batch_size_val=1024
         )
 
         # Teacher (LeNet-5)
@@ -425,7 +425,7 @@ if __name__ == '__main__':
             callbacks=[csv_logger, gif_maker],
         )
 
-    def run_experiment_cifar10(pretrained_teacher:bool=False):
+    def expt_cifar10(pretrained_teacher:bool=False):
         # Algorithm                     Required data   FLOPS   params  CIFAR-10  CIFAR-100
         # Teacher                       Original data   16G     21M     95.58%    77.84%
         # Standard back-propagation     Original data   557M    11M     93.92%    76.53%
@@ -558,4 +558,4 @@ if __name__ == '__main__':
             validation_data=ds['test']
         )
 
-    run_experiment_mnist(pretrained_teacher=True)
+    expt_mnist(pretrained_teacher=True, skip_baseline=True)
