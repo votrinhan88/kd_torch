@@ -14,10 +14,10 @@ class PlaceholderDataset(torch.utils.data.Dataset):
         self.batch_size = batch_size
 
     def __len__(self):
-        return self.num_batches
+        return self.num_batches*self.batch_size
 
     def __getitem__(self, index):
-        return (torch.zeros([self.batch_size, 1]), torch.zeros([self.batch_size, 1]))
+        return (torch.zeros([1]), torch.zeros([1]))
 
 class IntermediateFeatureExtractor(torch.nn.Module):
     def __init__(

@@ -172,7 +172,7 @@ class DataFreeDistiller(Trainer):
 
         # Phase 1: Training the Generator
         self.generator.train()
-        self.student.eval()
+        self.student.train()
         self.optimizer_generator.zero_grad()
         ## Forward
         x_synth = self.synthesize_images()
@@ -187,9 +187,6 @@ class DataFreeDistiller(Trainer):
             + self.coeff_ac*loss_activation
             + self.coeff_ie*loss_info_entropy
         )
-        ## Backward
-        loss_generator.backward()
-        self.optimizer_generator.step()
         
         # Phase 2: Training the Student
         self.generator.eval()
@@ -198,10 +195,13 @@ class DataFreeDistiller(Trainer):
         ## Forward
         logits_student = self.student(x_synth.clone().detach())
         log_prob_student = torch.nn.functional.log_softmax(input=logits_student, dim=1)
-        log_prob_teacher = torch.nn.functional.log_softmax(input=logits_teacher, dim=1)
-        loss_distill = self.distill_loss_fn(input=log_prob_student, target=log_prob_teacher)
+        log_prob_teacher = torch.nn.functional.log_softmax(input=logits_teacher.clone().detach(), dim=1)
+        loss_distill:torch.Tensor = self.distill_loss_fn(input=log_prob_student, target=log_prob_teacher)
+
+        loss = loss_generator + loss_distill
         ## Backward
-        loss_distill.backward()
+        loss.backward()
+        self.optimizer_generator.step()
         self.optimizer_student.step()
 
         with torch.inference_mode():
@@ -385,12 +385,6 @@ if __name__ == '__main__':
         )
         generator = DataFreeGenerator(latent_dim=LATENT_DIM, image_dim=IMAGE_DIM)
 
-        distiller = DataFreeDistiller(
-            teacher=teacher,
-            student=student,
-            generator=generator)
-
-        # Train one student with default data-free learning settings
         distiller = DataFreeDistiller(
             teacher=teacher, student=student, generator=generator)
         distiller.compile(
