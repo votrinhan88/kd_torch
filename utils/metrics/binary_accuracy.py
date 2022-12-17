@@ -5,7 +5,7 @@ class BinaryAccuracy(Metric):
     def __init__(self):
         self.reset()
     
-    def update(self, label:torch.Tensor, prediction:torch.Tensor):
+    def update(self, prediction:torch.Tensor, label:torch.Tensor):
         label = label.to('cpu')
         prediction = prediction.to('cpu')
 

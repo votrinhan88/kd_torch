@@ -60,7 +60,7 @@ class Distiller(Trainer):
         student_loss_fn:Union[bool, Callable[[Any], torch.Tensor]]=True,
         coeff_dt:float=0.9,
         coeff_st:float=0.1,
-        temperature:float=10
+        temperature:float=10,
     ):
         """Compile distiller.
         
@@ -127,14 +127,15 @@ class Distiller(Trainer):
         logits_student = self.student(input)
         # Standard loss with training data
         loss_student = self._student_loss_fn(logits_student, label)
-        loss_distill = self._soft_distill_loss_fn(
-            logits_student=logits_student,
-            logits_teacher=logits_teacher,
-        )
+        log_prob_student = torch.nn.functional.log_softmax(input=logits_student/self.temperature, dim=1)
+        log_prob_teacher = torch.nn.functional.log_softmax(input=logits_teacher/self.temperature, dim=1)
+        loss_distill = self._distill_loss_fn(input=log_prob_student, target=log_prob_teacher)# * self.temperature**2
         loss = self.coeff_st*loss_student + self.coeff_dt*loss_distill
+        
         # Backward
         loss.backward()
         self.optimizer.step()
+        
         with torch.inference_mode():
             # Metrics
             if self.distill_loss_fn is not False:
@@ -157,20 +158,6 @@ class Distiller(Trainer):
             # Metrics
             self.val_metrics['loss_st'].update(new_entry=loss_student)
             self.val_metrics['acc'].update(label=label, prediction=logits_student)
-
-    def _soft_distill_loss_fn(
-        self,
-        logits_student:torch.Tensor,
-        logits_teacher:torch.Tensor,
-    ) -> torch.Tensor:
-        log_prob_student = torch.nn.functional.log_softmax(input=logits_student/self.temperature, dim=1)
-        log_prob_teacher = torch.nn.functional.log_softmax(input=logits_teacher/self.temperature, dim=1)
-        # Scaled distillation loss from https://arxiv.org/abs/1503.02531
-        # The magnitudes of the gradients produced by the soft targets scale
-        # as 1/T^2, multiply them by T^2 when using both hard and soft targets.
-        # But empirical experiments show better results when not multiplying by T^2
-        loss = self._distill_loss_fn(input=log_prob_student, target=log_prob_teacher)# * self.temperature**2
-        return loss
 
 if __name__ == '__main__':
     from models.classifiers import HintonNet, ClassifierTrainer

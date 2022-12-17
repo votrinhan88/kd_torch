@@ -84,11 +84,11 @@ class DataFreeDistiller(Trainer):
         self,
         optimizer_student:torch.optim.Optimizer,
         optimizer_generator:torch.optim.Optimizer,
-        distill_loss_fn:Callable[[Any], torch.Tensor]=torch.nn.KLDivLoss(reduction='batchmean', log_target=True),
-        student_loss_fn:Callable[[Any], torch.Tensor]=torch.nn.CrossEntropyLoss(),
         onehot_loss_fn:Union[bool, Callable[[Any], torch.Tensor]]=True,
         activation_loss_fn:Union[bool, Callable[[Any], torch.Tensor]]=True,
         info_entropy_loss_fn:Union[bool, Callable[[Any], torch.Tensor]]=True,
+        distill_loss_fn:Callable[[Any], torch.Tensor]=torch.nn.KLDivLoss(reduction='batchmean', log_target=True),
+        student_loss_fn:Callable[[Any], torch.Tensor]=torch.nn.CrossEntropyLoss(),
         coeff_oh:float=1,
         coeff_ac:float=0.1,
         coeff_ie:float=5,
@@ -106,11 +106,11 @@ class DataFreeDistiller(Trainer):
         super().compile()
         self.optimizer_student = optimizer_student
         self.optimizer_generator = optimizer_generator
-        self.distill_loss_fn = distill_loss_fn
-        self.student_loss_fn = student_loss_fn
         self.onehot_loss_fn = onehot_loss_fn
         self.activation_loss_fn = activation_loss_fn
         self.info_entropy_loss_fn = info_entropy_loss_fn
+        self.distill_loss_fn = distill_loss_fn
+        self.student_loss_fn = student_loss_fn
         self.coeff_oh = coeff_oh
         self.coeff_ac = coeff_ac
         self.coeff_ie = coeff_ie
@@ -174,20 +174,20 @@ class DataFreeDistiller(Trainer):
         self.generator.train()
         self.student.eval()
         self.optimizer_generator.zero_grad()
-        # Forward
+        ## Forward
         x_synth = self.synthesize_images()
-        features, teacher_logits = self.teacher(x_synth)
-        pseudo_label = torch.argmax(input=teacher_logits.clone().detach(), dim=1)
-
-        loss_onehot = self._onehot_loss_fn(teacher_logits, pseudo_label)
-        loss_activation = self._activation_loss_fn(features.get('flatten'))
-        loss_info_entropy = self._info_entropy_loss_fn(teacher_logits)
+        features_teacher, logits_teacher = self.teacher(x_synth)
+        pseudo_label = torch.argmax(input=logits_teacher.clone().detach(), dim=1)
+        
+        loss_onehot = self._onehot_loss_fn(logits_teacher, pseudo_label)
+        loss_activation = self._activation_loss_fn(features_teacher.get('flatten'))
+        loss_info_entropy = self._info_entropy_loss_fn(logits_teacher)
         loss_generator = (
             self.coeff_oh*loss_onehot
             + self.coeff_ac*loss_activation
             + self.coeff_ie*loss_info_entropy
         )
-        # Backward
+        ## Backward
         loss_generator.backward()
         self.optimizer_generator.step()
         
@@ -195,16 +195,17 @@ class DataFreeDistiller(Trainer):
         self.generator.eval()
         self.student.train()
         self.optimizer_student.zero_grad()
-        # Forward
-        student_logits = self.student(x_synth.clone().detach())
-        loss_distill = self.distill_loss_fn(
-            student_logits,
-            teacher_logits.clone().detach())
-        # Backward
+        ## Forward
+        logits_student = self.student(x_synth.clone().detach())
+        log_prob_student = torch.nn.functional.log_softmax(input=logits_student, dim=1)
+        log_prob_teacher = torch.nn.functional.log_softmax(input=logits_teacher, dim=1)
+        loss_distill = self.distill_loss_fn(input=log_prob_student, target=log_prob_teacher)
+        ## Backward
         loss_distill.backward()
         self.optimizer_student.step()
 
         with torch.inference_mode():
+            # Metrics
             if self.onehot_loss_fn is not False:
                 self.train_metrics['loss_oh'].update(new_entry=loss_onehot)
             if self.activation_loss_fn is not False:
@@ -395,11 +396,11 @@ if __name__ == '__main__':
         distiller.compile(
             optimizer_student=torch.optim.Adam(params=student.parameters(), lr=LEARNING_RATE_STUDENT),
             optimizer_generator=torch.optim.Adam(params=generator.parameters(), lr=LEARNING_RATE_GENERATOR),
-            # distill_loss_fn=torch.nn.KLDivLoss(log_target=True),
-            # student_loss_fn=torch.nn.CrossEntropyLoss(),
             onehot_loss_fn=True,
             activation_loss_fn=True,
             info_entropy_loss_fn=True,
+            distill_loss_fn=torch.nn.KLDivLoss(reduction='batchmean', log_target=True),
+            student_loss_fn=torch.nn.CrossEntropyLoss(),
             batch_size=BATCH_SIZE_DISTILL,
             num_batches=120,
             coeff_oh=COEFF_OH,
