@@ -44,8 +44,8 @@ class Distiller(Trainer):
             Additional keyword arguments passed to `keras.Model.__init__`.
         """        
         super().__init__()
-        self.teacher = teacher
-        self.student = student
+        self.teacher = teacher.to(self.device)
+        self.student = student.to(self.device)
         self.image_dim = image_dim
         
         if self.image_dim is None:

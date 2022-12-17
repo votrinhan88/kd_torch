@@ -65,9 +65,9 @@ class DataFreeDistiller(Trainer):
         image_dim:Optional[Sequence[int]]=None
     ):
         super().__init__()
-        self.teacher = teacher
-        self.student = student
-        self.generator = generator
+        self.teacher = teacher.to(self.device)
+        self.student = student.to(self.device)
+        self.generator = generator.to(self.device)
         self.image_dim = image_dim
 
         if latent_dim is None:
