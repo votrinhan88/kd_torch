@@ -177,7 +177,7 @@ class DataFreeDistiller(Trainer):
         # Forward
         x_synth = self.synthesize_images()
         features, teacher_logits = self.teacher(x_synth)
-        pseudo_label = torch.argmax(input=teacher_logits, dim=1)
+        pseudo_label = torch.argmax(input=teacher_logits.clone().detach(), dim=1)
 
         loss_onehot = self._onehot_loss_fn(teacher_logits, pseudo_label)
         loss_activation = self._activation_loss_fn(features.get('flatten'))
