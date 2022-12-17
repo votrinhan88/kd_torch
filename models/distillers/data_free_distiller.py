@@ -84,8 +84,8 @@ class DataFreeDistiller(Trainer):
         self,
         optimizer_student:torch.optim.Optimizer,
         optimizer_generator:torch.optim.Optimizer,
-        distill_loss_fn:Callable[[Any], torch.Tensor],
-        student_loss_fn:Callable[[Any], torch.Tensor],
+        distill_loss_fn:Callable[[Any], torch.Tensor]=torch.nn.KLDivLoss(reduction='batchmean', log_target=True),
+        student_loss_fn:Callable[[Any], torch.Tensor]=torch.nn.CrossEntropyLoss(),
         onehot_loss_fn:Union[bool, Callable[[Any], torch.Tensor]]=True,
         activation_loss_fn:Union[bool, Callable[[Any], torch.Tensor]]=True,
         info_entropy_loss_fn:Union[bool, Callable[[Any], torch.Tensor]]=True,
@@ -95,12 +95,12 @@ class DataFreeDistiller(Trainer):
         batch_size:int=512,
         num_batches:int=120,
     ):
-        if not isinstance(onehot_loss_fn, (Callable[[Any], torch.Tensor], bool)):
+        if not isinstance(onehot_loss_fn, (Callable, bool)):
             warnings.warn(
                 '`onehot_loss_fn` should be of type `Callable[[Any], torch.Tensor]` or `bool`.')
-        if not isinstance(activation_loss_fn, (Callable[[Any], torch.Tensor], bool)):
+        if not isinstance(activation_loss_fn, (Callable, bool)):
             warnings.warn('`activation_loss_fn` should be of type `Callable[[Any], torch.Tensor]` or `bool`.')
-        if not isinstance(info_entropy_loss_fn, (Callable[[Any], torch.Tensor], bool)):
+        if not isinstance(info_entropy_loss_fn, (Callable, bool)):
             warnings.warn('`info_entropy_loss_fn` should be of type `Callable[[Any], torch.Tensor]` or `bool`.')
         
         super().compile()
@@ -196,9 +196,9 @@ class DataFreeDistiller(Trainer):
         self.student.train()
         self.optimizer_student.zero_grad()
         # Forward
-        student_logits = self.student(x_synth)
+        student_logits = self.student(x_synth.clone().detach())
         loss_distill = self.distill_loss_fn(
-            student_logits.clone().detach(),
+            student_logits,
             teacher_logits.clone().detach())
         # Backward
         loss_distill.backward()
@@ -268,7 +268,7 @@ if __name__ == '__main__':
         # Traditional KD:                       98.91%         98.39%
         # Data-free KD:                         98.20%         97.91%    
         LATENT_DIM = 100
-        IMAGE_DIM = [32, 32, 1] # LeNet-5 accepts [32, 32] images
+        IMAGE_DIM = [1, 32, 32] # LeNet-5 accepts [32, 32] images
         NUM_CLASSES = 10
         BATCH_SIZE_TEACHER, BATCH_SIZE_DISTILL = 256, 512
         NUM_EPOCHS_TEACHER, NUM_EPOCHS_DISTILL = 10, 200
@@ -280,7 +280,7 @@ if __name__ == '__main__':
         
         dataloader = get_dataloader(
             dataset='MNIST',
-            resize=IMAGE_DIM[0:-1],
+            resize=IMAGE_DIM[1:],
             rescale='standardization',
             batch_size_train=BATCH_SIZE_TEACHER,
             batch_size_val=1024
@@ -395,8 +395,8 @@ if __name__ == '__main__':
         distiller.compile(
             optimizer_student=torch.optim.Adam(params=student.parameters(), lr=LEARNING_RATE_STUDENT),
             optimizer_generator=torch.optim.Adam(params=generator.parameters(), lr=LEARNING_RATE_GENERATOR),
-            distill_loss_fn=torch.nn.KLDivLoss(log_target=True),
-            student_loss_fn=torch.nn.CrossEntropyLoss(),
+            # distill_loss_fn=torch.nn.KLDivLoss(log_target=True),
+            # student_loss_fn=torch.nn.CrossEntropyLoss(),
             onehot_loss_fn=True,
             activation_loss_fn=True,
             info_entropy_loss_fn=True,
@@ -421,7 +421,7 @@ if __name__ == '__main__':
 
         distiller.training_loop(
             num_epochs=NUM_EPOCHS_DISTILL,
-            valloader=dataloader['test'],
+            valloader=dataloader['val'],
             callbacks=[csv_logger, gif_maker],
         )
 
