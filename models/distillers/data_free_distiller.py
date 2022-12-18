@@ -87,7 +87,7 @@ class DataFreeDistiller(Trainer):
         onehot_loss_fn:Union[bool, Callable[[Any], torch.Tensor]]=True,
         activation_loss_fn:Union[bool, Callable[[Any], torch.Tensor]]=True,
         info_entropy_loss_fn:Union[bool, Callable[[Any], torch.Tensor]]=True,
-        distill_loss_fn:Callable[[Any], torch.Tensor]=torch.nn.KLDivLoss(reduction='batchmean', log_target=True),
+        distill_loss_fn:Callable[[Any], torch.Tensor]=torch.nn.KLDivLoss(reduction='batchmean'),
         student_loss_fn:Callable[[Any], torch.Tensor]=torch.nn.CrossEntropyLoss(),
         coeff_oh:float=1,
         coeff_ac:float=0.1,
@@ -96,8 +96,7 @@ class DataFreeDistiller(Trainer):
         num_batches:int=120,
     ):
         if not isinstance(onehot_loss_fn, (Callable, bool)):
-            warnings.warn(
-                '`onehot_loss_fn` should be of type `Callable[[Any], torch.Tensor]` or `bool`.')
+            warnings.warn('`onehot_loss_fn` should be of type `Callable[[Any], torch.Tensor]` or `bool`.')
         if not isinstance(activation_loss_fn, (Callable, bool)):
             warnings.warn('`activation_loss_fn` should be of type `Callable[[Any], torch.Tensor]` or `bool`.')
         if not isinstance(info_entropy_loss_fn, (Callable, bool)):
@@ -172,7 +171,7 @@ class DataFreeDistiller(Trainer):
 
         # Phase 1: Training the Generator
         self.generator.train()
-        self.student.train()
+        self.student.eval()
         self.optimizer_generator.zero_grad()
         ## Forward
         x_synth = self.synthesize_images()
@@ -193,15 +192,15 @@ class DataFreeDistiller(Trainer):
         self.student.train()
         self.optimizer_student.zero_grad()
         ## Forward
-        logits_student = self.student(x_synth.clone().detach())
-        log_prob_student = torch.nn.functional.log_softmax(input=logits_student, dim=1)
-        log_prob_teacher = torch.nn.functional.log_softmax(input=logits_teacher.clone().detach(), dim=1)
-        loss_distill:torch.Tensor = self.distill_loss_fn(input=log_prob_student, target=log_prob_teacher)
-
-        loss = loss_generator + loss_distill
+        logits_student:torch.Tensor = self.student(x_synth.clone().detach())
+        log_prob_student = logits_student.log_softmax(dim=1)
+        prob_teacher = logits_teacher.clone().detach().softmax(dim=1)
+        loss_distill:torch.Tensor = self.distill_loss_fn(input=log_prob_student, target=prob_teacher)
+        
         ## Backward
-        loss.backward()
+        loss_generator.backward()
         self.optimizer_generator.step()
+        loss_distill.backward()
         self.optimizer_student.step()
 
         with torch.inference_mode():
