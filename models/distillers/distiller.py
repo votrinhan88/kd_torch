@@ -129,6 +129,7 @@ class Distiller(Trainer):
         loss_student = self._student_loss_fn(logits_student, label)
         log_prob_student = (logits_student/self.temperature).log_softmax(dim=1)
         prob_teacher = (logits_teacher/self.temperature).softmax(dim=1)
+        # Not multiplying with T^2 gives slightly better results
         loss_distill = self._distill_loss_fn(input=log_prob_student, target=prob_teacher)# * self.temperature**2
         loss = self.coeff_st*loss_student + self.coeff_dt*loss_distill
         
