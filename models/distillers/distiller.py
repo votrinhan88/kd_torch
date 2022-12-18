@@ -83,7 +83,7 @@ class Distiller(Trainer):
 
         # Config distillation loss
         if self.distill_loss_fn is True:
-            self._distill_loss_fn = torch.nn.KLDivLoss(reduction='batchmean', log_target=True)
+            self._distill_loss_fn = torch.nn.KLDivLoss(reduction='batchmean')
         elif self.distill_loss_fn is False:
             self._distill_loss_fn = lambda *args, **kwargs:0
         else:
@@ -123,13 +123,13 @@ class Distiller(Trainer):
         self.student.train()
         self.optimizer.zero_grad()
         # Forward
-        logits_teacher = self.teacher(input)
-        logits_student = self.student(input)
+        logits_teacher:torch.Tensor = self.teacher(input)
+        logits_student:torch.Tensor = self.student(input)
         # Standard loss with training data
         loss_student = self._student_loss_fn(logits_student, label)
-        log_prob_student = torch.nn.functional.log_softmax(input=logits_student/self.temperature, dim=1)
-        log_prob_teacher = torch.nn.functional.log_softmax(input=logits_teacher/self.temperature, dim=1)
-        loss_distill = self._distill_loss_fn(input=log_prob_student, target=log_prob_teacher)# * self.temperature**2
+        log_prob_student = (logits_student/self.temperature).log_softmax(dim=1)
+        prob_teacher = (logits_teacher/self.temperature).softmax(dim=1)
+        loss_distill = self._distill_loss_fn(input=log_prob_student, target=prob_teacher)# * self.temperature**2
         loss = self.coeff_st*loss_student + self.coeff_dt*loss_distill
         
         # Backward
@@ -164,7 +164,7 @@ if __name__ == '__main__':
     from utils.dataloader import get_dataloader
     from utils.callbacks import CSVLogger, ModelCheckpoint
     
-    def test_mnist(pretrained_teacher:bool=True, skip_baseline:bool=True):
+    def expt_mnist(pretrained_teacher:bool=True, skip_baseline:bool=True):
         IMAGE_DIM = [28, 28, 1]
         NUM_CLASSES = 10
         HIDDEN_LAYERS_TEACHER, HIDDEN_LAYERS_STUDENT = [1200, 1200], [800, 800]
@@ -284,4 +284,4 @@ if __name__ == '__main__':
         )
 
     for i in range(5):
-        test_mnist(pretrained_teacher=True, skip_baseline=True)
+        expt_mnist(pretrained_teacher=True, skip_baseline=True)
