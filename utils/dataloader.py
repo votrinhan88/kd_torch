@@ -53,8 +53,8 @@ def get_dataloader(dataset:str,
     ROOT = './datasets'
     
     STANDARDIZATION_MEAN_STD = {
-        'CIFAR10': (torch.Tensor([[[0.4914, 0.4822, 0.4465]]]), torch.Tensor([[[0.2470, 0.2435, 0.2616]]])),
-        'CIFAR100': (torch.Tensor([[[0.5071, 0.4866, 0.4409]]]), torch.Tensor([[[0.2673, 0.2564, 0.2762]]])),
+        'CIFAR10': (torch.Tensor([0.4914, 0.4822, 0.4465]), torch.Tensor([0.2470, 0.2435, 0.2616])),
+        'CIFAR100': (torch.Tensor([0.5071, 0.4866, 0.4409]), torch.Tensor([0.2673, 0.2564, 0.2762])),
         'FashionMNIST': (torch.Tensor([0.2860]), torch.Tensor([0.3530])),
         'MNIST': (torch.Tensor([0.1307]), torch.Tensor([0.3081])),
     }
