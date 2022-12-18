@@ -110,7 +110,7 @@ class Distiller(Trainer):
         })
 
         self.val_metrics = {
-            'loss_st': Mean(),
+            'loss': Mean(),
             'acc': CategoricalAccuracy(),
         }
 

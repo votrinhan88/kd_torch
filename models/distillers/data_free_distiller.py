@@ -160,8 +160,8 @@ class DataFreeDistiller(Trainer):
         })
 
         self.val_metrics = {
-            'loss_st': Mean(),
-            'acc_st': CategoricalAccuracy(),
+            'loss': Mean(),
+            'acc': CategoricalAccuracy(),
         }
 
     def train_batch(self, data:Any):
