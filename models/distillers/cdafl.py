@@ -359,7 +359,8 @@ if __name__ == '__main__':
             filename=f'./logs/{distiller.__class__.__name__}_{student.__class__.__name__}_mnist.gif',
             postprocess_fn=lambda x:x*0.3081 + 0.1307,
             normalize=False,
-            save_freq=NUM_EPOCHS_DISTILL//50
+            class_names=dataloader['train'].dataset.classes,
+            # save_freq=NUM_EPOCHS_DISTILL//50,
         )
         distiller.training_loop(
             num_epochs=NUM_EPOCHS_DISTILL,
