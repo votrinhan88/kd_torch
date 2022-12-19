@@ -66,6 +66,8 @@ class DataFreeDistiller(Trainer):
     ):
         super().__init__()
         self.teacher = teacher.to(self.device)
+        for param in self.teacher.parameters():
+            param.requires_grad = False
         self.student = student.to(self.device)
         self.generator = generator.to(self.device)
         self.latent_dim = latent_dim
