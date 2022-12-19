@@ -1,7 +1,7 @@
 import torch
 from .metric import Metric
 
-class CategoricalAccuracy(Metric):
+class SparseCategoricalAccuracy(Metric):
     def __init__(self):
         self.reset()
     
@@ -11,7 +11,6 @@ class CategoricalAccuracy(Metric):
 
         # `prediction` can be probability or logits
         pred_label = prediction.argmax(dim=1)
-        label = label.argmax(dim=1)
         self.num_observed += label.shape[0]
 
         self.label = torch.cat(tensors=[self.label, label], dim=0)
