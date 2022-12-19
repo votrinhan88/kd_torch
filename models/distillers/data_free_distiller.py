@@ -222,8 +222,8 @@ class DataFreeDistiller(Trainer):
             logits_student = self.student(input)
             loss_student = self.student_loss_fn(logits_student, label)
             # Metrics
-            self.val_metrics['loss_st'].update(new_entry=loss_student)
-            self.val_metrics['acc_st'].update(label=label, prediction=logits_student)
+            self.val_metrics['loss'].update(new_entry=loss_student)
+            self.val_metrics['acc'].update(label=label, prediction=logits_student)
 
     def synthesize_images(self) -> torch.Tensor:
         latent_noise = torch.normal(mean=0, std=1, size=[self.batch_size, self.latent_dim], device=self.device)

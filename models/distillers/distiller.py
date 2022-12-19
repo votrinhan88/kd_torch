@@ -157,7 +157,7 @@ class Distiller(Trainer):
             logits_student = self.student(input)
             loss_student = self._test_loss_fn(logits_student, label)
             # Metrics
-            self.val_metrics['loss_st'].update(new_entry=loss_student)
+            self.val_metrics['loss'].update(new_entry=loss_student)
             self.val_metrics['acc'].update(label=label, prediction=logits_student)
 
 if __name__ == '__main__':
