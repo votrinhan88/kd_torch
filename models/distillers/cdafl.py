@@ -352,7 +352,6 @@ if __name__ == '__main__':
         )
         gif_maker = MakeConditionalSyntheticGIFCallback(
             filename=f'./logs/{distiller.__class__.__name__}_{student.__class__.__name__}_mnist.gif',
-            nrows=5, ncols=5,
             postprocess_fn=lambda x:x*0.3081 + 0.1307,
             normalize=False,
             save_freq=NUM_EPOCHS_DISTILL//50

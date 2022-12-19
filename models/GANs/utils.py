@@ -265,7 +265,7 @@ class MakeConditionalSyntheticGIFCallback(MakeSyntheticGIFCallback):
         `class_names`: Sequence of name of labels, should have length equal to total
             number of classes. Leave as `None` for generic `'class x'` names.
             Defaults to `None`.
-        `onehot_input`: Flag to indicate whether the GAN model/generator receives
+        `onehot_label`: Flag to indicate whether the GAN model/generator receives
             one-hot or label encoded target classes, leave as `None` to be parsed
             from model. Defaults to `None`.
         `keep_noise`: Flag to feed the same latent noise to generator for the whole
@@ -285,7 +285,7 @@ class MakeConditionalSyntheticGIFCallback(MakeSyntheticGIFCallback):
                  image_dim:Union[None, Sequence[int]]=None,
                  num_classes:Union[None, int]=None,
                  class_names:Union[None, Sequence[str]]=None,
-                 onehot_input:Union[None, bool]=None,
+                 onehot_label:Union[None, bool]=None,
                  keep_noise:bool=True,
                  seed:Union[None, int]=None,
                  delete_png:bool=True,
@@ -312,7 +312,7 @@ class MakeConditionalSyntheticGIFCallback(MakeSyntheticGIFCallback):
             `class_names`: Sequence of name of labels, should have length equal to total
                 number of classes. Leave as `None` for generic `'class x'` names.
                 Defaults to `None`.
-            `onehot_input`: Flag to indicate whether the GAN model/generator receives
+            `onehot_label`: Flag to indicate whether the GAN model/generator receives
                 one-hot or label encoded target classes, leave as `None` to be parsed
                 from model. Defaults to `None`.
             `keep_noise`: Flag to feed the same latent noise to generator for the whole
@@ -340,7 +340,7 @@ class MakeConditionalSyntheticGIFCallback(MakeSyntheticGIFCallback):
         self.num_samples_per_class = num_samples_per_class
         self.num_classes = num_classes
         self.class_names = class_names
-        self.onehot_input = onehot_input
+        self.onehot_label = onehot_label
 
     def handle_args(self):
         super(MakeConditionalSyntheticGIFCallback, self).handle_args()
@@ -350,8 +350,8 @@ class MakeConditionalSyntheticGIFCallback(MakeSyntheticGIFCallback):
         if self.class_names is None:
             self.class_names = [f'Class {i}' for i in range(self.num_classes)]
 
-        if self.onehot_input is None:
-            self.onehot_input:bool = self.host.onehot_input
+        if self.onehot_label is None:
+            self.onehot_label:bool = self.host.onehot_label
 
         if self.target_classes is None:
             self.target_classes = [label for label in range(self.num_classes)]
@@ -363,7 +363,7 @@ class MakeConditionalSyntheticGIFCallback(MakeSyntheticGIFCallback):
         super().precompute_inputs()
 
         self.label = torch.tensor(self.target_classes, dtype=torch.long, device=self.device).repeat([self.nrows])
-        if self.onehot_input is True:
+        if self.onehot_label is True:
             self.label = torch.nn.functional.one_hot(input=self.label, num_classes=self.num_classes)
         self.label = self.label.to(dtype=torch.float)
 
@@ -527,16 +527,16 @@ class MakeInterpolateSyntheticGIFCallback(MakeSyntheticGIFCallback):
     def handle_args(self):
         super().handle_args()
 
-        if self.host.onehot_input is None:
+        if self.host.onehot_label is None:
             warnings.warn(
-                f'Host does not have attribute `onehot_input`. ' +
+                f'Host does not have attribute `onehot_label`. ' +
                 'Proceed with assumption that it receives one-hot encoded inputs.')
-            self.onehot_input = True
-        elif self.host.onehot_input is not None:
-            assert self.host.onehot_input is True, (
+            self.onehot_label = True
+        elif self.host.onehot_label is not None:
+            assert self.host.onehot_label is True, (
                 'Callback only works with models receiving one-hot encoded inputs.'
             )
-            self.onehot_input = True
+            self.onehot_label = True
 
         if self.num_classes is None:
             self.num_classes:int = self.host.num_classes
