@@ -135,6 +135,7 @@ class ConditionalDataFreeDistiller(DataFreeDistiller):
         coeff_ie:float=5,
         coeff_cn:float=1,
         coeff_ds:float=1,
+        label_smoothing:float=0,
         batch_size:int=500,
         num_batches:int=120,
     ):
@@ -160,16 +161,13 @@ class ConditionalDataFreeDistiller(DataFreeDistiller):
         self.conditional_loss_fn = conditional_loss_fn
         self.distribution_loss_fn = distribution_loss_fn
         self.distribution_layer = distribution_layer
+        self.label_smoothing = label_smoothing
         self.coeff_cn = coeff_cn
         self.coeff_ds = coeff_ds
 
         # Config conditional loss
         if self.conditional_loss_fn is True:
-            if self.onehot_label is True:
-                self._conditional_loss_fn = torch.nn.KLDivLoss(reduction='batchmean')
-                # self._conditional_loss_fn = torch.nn.CrossEntropyLoss()
-            elif self.onehot_label is False:
-                self._conditional_loss_fn = torch.nn.CrossEntropyLoss()
+            self._conditional_loss_fn = torch.nn.CrossEntropyLoss()
         elif self.conditional_loss_fn is False:
             self._conditional_loss_fn = lambda *args, **kwargs:0
         else:
@@ -258,6 +256,7 @@ class ConditionalDataFreeDistiller(DataFreeDistiller):
         label = torch.randint(low=0, high=self.num_classes, size=[self.batch_size], device=self.device)
         if self.onehot_label is True:
             label = torch.nn.functional.one_hot(input=label, num_classes=self.num_classes)
+            label = (1 - self.label_smoothing)*label + self.label_smoothing/self.num_classes
         label = label.to(torch.float)
         x_synth = self.generator(latent_noise, label)
         return x_synth, label
@@ -280,20 +279,21 @@ if __name__ == '__main__':
     from utils.dataloader import get_dataloader
     from utils.metrics import CategoricalAccuracy
 
-    def expt_mnist():
+    def expt_mnist(run:int=0):
         LATENT_DIM = 100
         IMAGE_DIM = [1, 28, 28]
         EMBED_DIM = None
         NUM_CLASSES = 10
         BATCH_SIZE = 128
-        NUM_EPOCHS_DISTILL = 200
-        OPT_GEN, KWARGS_OPT_GEN = torch.optim.Adam, {'lr': 2e-1}
+        NUM_EPOCHS_DISTILL = 50
+        OPT_GEN, KWARGS_OPT_GEN = torch.optim.Adam, {'lr': 2e-4}
         OPT_STU, KWARGS_OPT_STU = torch.optim.Adam, {'lr': 2e-3}
-        ONEHOT_LOSS_FN,       COEFF_OH = True, 1
-        ACTIVATION_LOSS_FN,   COEFF_AC = True, 0.1
-        INFO_ENTROPY_LOSS_FN, COEFF_IE = True, 5
+        ONEHOT_LOSS_FN,       COEFF_OH = False, 1
+        ACTIVATION_LOSS_FN,   COEFF_AC = False, 0.1
+        INFO_ENTROPY_LOSS_FN, COEFF_IE = False, 5
         CONDITIONAL_LOSS_FN,  COEFF_CN = True, 1
-        DISTRIBUTION_LOSS_FN, COEFF_DS = True, 1
+        DISTRIBUTION_LOSS_FN, COEFF_DS = False, 1
+        LABEL_SMOOTHING = 0
 
         dataloader = get_dataloader(
             dataset='MNIST',
@@ -361,15 +361,15 @@ if __name__ == '__main__':
             coeff_ie=COEFF_IE,
             coeff_cn=COEFF_CN,
             coeff_ds=COEFF_DS,
-
+            label_smoothing=LABEL_SMOOTHING,
         )
 
         csv_logger = CSVLogger(
-            filename=f'./logs/{distiller.__class__.__name__}_{student.__class__.__name__}_mnist.csv',
+            filename=f"./logs/{distiller.__class__.__name__} - {student.__class__.__name__} - {KWARGS_OPT_GEN['lr']}, {KWARGS_OPT_STU['lr']} - run {run}.csv",
             append=True
         )
         gif_maker = MakeConditionalSyntheticGIFCallback(
-            filename=f'./logs/{distiller.__class__.__name__}_{student.__class__.__name__}_mnist.gif',
+            filename=f"./logs/{distiller.__class__.__name__} - {student.__class__.__name__} - {KWARGS_OPT_GEN['lr']}, {KWARGS_OPT_STU['lr']} - run {run}.gif",
             postprocess_fn=lambda x:x*0.3081 + 0.1307,
             normalize=False,
             class_names=dataloader['train'].dataset.classes,
@@ -381,4 +381,5 @@ if __name__ == '__main__':
             callbacks=[csv_logger, gif_maker]
         )
 
-    expt_mnist()
+for run in range(3):
+    expt_mnist(run)
