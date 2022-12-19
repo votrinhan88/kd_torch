@@ -21,7 +21,7 @@ class ConditionalGenerator(torch.nn.Module):
                  base_dim:Sequence[int]=[256, 7, 7],
                  embed_dim:Optional[int]=None,
                  num_classes:int=10,
-                 onehot_input:bool=True,
+                 onehot_label:bool=True,
                  ):
         """Initialize generator.
         
@@ -33,10 +33,10 @@ class ConditionalGenerator(torch.nn.Module):
                 is halved until `image_dim` is reached. Defaults to `[7, 7, 256]`.
             `embed_dim`: Dimension of embedding layer. Defaults to `50`.
             `num_classes`: Number of classes. Defaults to `10`.
-            `onehot_input`: `onehot_input`: Flag to indicate whether the model receives
+            `onehot_label`: `onehot_label`: Flag to indicate whether the model receives
                 one-hot or label encoded target classes. Defaults to `True`.
         """
-        assert isinstance(onehot_input, bool), '`onehot_input` must be of type `bool`.'
+        assert isinstance(onehot_label, bool), '`onehot_label` must be of type `bool`.'
         assert isinstance(embed_dim, Optional[int]), '`embed_dim` must be of type `int` or `None`.'
 
         # Parse architecture from input dimension
@@ -53,7 +53,7 @@ class ConditionalGenerator(torch.nn.Module):
         self.base_dim = base_dim
         self.embed_dim = embed_dim
         self.num_classes = num_classes
-        self.onehot_input = onehot_input
+        self.onehot_label = onehot_label
 
         # Traditional latent branch
         self.latent_branch = torch.nn.Sequential(
@@ -64,7 +64,7 @@ class ConditionalGenerator(torch.nn.Module):
 
         # Conditional label branch
         label_branch = []
-        if self.onehot_input is False:
+        if self.onehot_label is False:
             label_branch.append(OneHotEncoding(num_classes=self.num_classes))
         if self.embed_dim is not None:
             # Replace Embedding with Dense for to accept interpolated label inputs
@@ -118,7 +118,7 @@ class ConditionalDiscriminator(torch.nn.Module):
                  base_dim:Sequence[int]=[256, 7, 7],
                  embed_dim:Optional[int]=None,
                  num_classes:int=10,
-                 onehot_input:bool=True,
+                 onehot_label:bool=True,
                  return_logits:bool=True,
                  ):
         """Initialize discriminator.
@@ -134,7 +134,7 @@ class ConditionalDiscriminator(torch.nn.Module):
             `return_logits`: flag to choose between return logits or probability.
                 Defaults to `True`.
         """
-        assert isinstance(onehot_input, bool), '`onehot_input` must be of type bool.'
+        assert isinstance(onehot_label, bool), '`onehot_label` must be of type bool.'
         assert isinstance(return_logits, bool), '`return_logits` must be of type bool.'
 
         # Parse architecture from input dimension
@@ -150,12 +150,12 @@ class ConditionalDiscriminator(torch.nn.Module):
         self.base_dim = base_dim
         self.embed_dim = embed_dim
         self.num_classes = num_classes
-        self.onehot_input = onehot_input
+        self.onehot_label = onehot_label
         self.return_logits = return_logits
 
         # Conditional label branch
         label_branch = []
-        if self.onehot_input is False:
+        if self.onehot_label is False:
             label_branch.append(OneHotEncoding(num_classes=self.num_classes))
         if self.embed_dim is not None:
             # Replace Embedding with Dense for to accept interpolated label inputs
@@ -216,9 +216,9 @@ class ConditionalGeneratorStack(torch.nn.Module):
                  image_dim:Sequence[int]=[1, 28, 28],
                  base_dim:Sequence[int]=[256, 7, 7],
                  num_classes:int=10,
-                 onehot_input:bool=True,
+                 onehot_label:bool=True,
                  ):
-        assert isinstance(onehot_input, bool), '`onehot_input` must be of type `bool`.'
+        assert isinstance(onehot_label, bool), '`onehot_label` must be of type `bool`.'
 
         # Parse architecture from input dimension
         dim_ratio = [image_dim[axis]/base_dim[axis] for axis in torch.arange(start=1, end=len(image_dim))]
@@ -233,9 +233,9 @@ class ConditionalGeneratorStack(torch.nn.Module):
         self.image_dim = image_dim
         self.base_dim = base_dim
         self.num_classes = num_classes
-        self.onehot_input = onehot_input
+        self.onehot_label = onehot_label
 
-        if self.onehot_input is False:
+        if self.onehot_label is False:
             self.oh_encode = OneHotEncoding(num_classes=self.num_classes)
 
         # Main branch: concat both branches and upsample
@@ -277,10 +277,10 @@ class ConditionalDiscriminatorStack(torch.nn.Module):
                  image_dim:Sequence[int]=[1, 28, 28],
                  base_dim:Sequence[int]=[256, 7, 7],
                  num_classes:int=10,
-                 onehot_input:bool=True,
+                 onehot_label:bool=True,
                  return_logits:bool=True,
                  ):
-        assert isinstance(onehot_input, bool), '`onehot_input` must be of type bool.'
+        assert isinstance(onehot_label, bool), '`onehot_label` must be of type bool.'
         assert isinstance(return_logits, bool), '`return_logits` must be of type bool.'
 
         # Parse architecture from input dimension
@@ -295,12 +295,12 @@ class ConditionalDiscriminatorStack(torch.nn.Module):
         self.image_dim = image_dim
         self.base_dim = base_dim
         self.num_classes = num_classes
-        self.onehot_input = onehot_input
+        self.onehot_label = onehot_label
         self.return_logits = return_logits
 
         # Conditional label branch
         label_branch = []
-        if self.onehot_input is False:
+        if self.onehot_label is False:
             label_branch.append(OneHotEncoding(num_classes=self.num_classes),)
         label_branch.append(Repeat2d(repeats=self.image_dim[1:]))
         self.label_branch = torch.nn.Sequential(*label_branch)
@@ -362,7 +362,7 @@ class CGAN(GAN):
                  latent_dim:Optional[int]=None,
                  image_dim:Optional[Sequence[int]]=None,
                  num_classes:Union[None, int]=None,
-                 onehot_input:Union[None, bool]=None,
+                 onehot_label:Union[None, bool]=None,
                  device:Optional[str]=None):
         """Initialize cGAN.
         
@@ -389,10 +389,10 @@ class CGAN(GAN):
         elif num_classes is not None:
             self.num_classes = num_classes
 
-        if onehot_input is None:
-            self.onehot_input:bool = self.generator.onehot_input
-        elif onehot_input is not None:
-            self.onehot_input = onehot_input
+        if onehot_label is None:
+            self.onehot_label:bool = self.generator.onehot_label
+        elif onehot_label is not None:
+            self.onehot_label = onehot_label
 
     def train_batch(self, data:Tuple[torch.Tensor, torch.Tensor]):
         '''
@@ -498,14 +498,14 @@ if __name__ == '__main__':
             base_dim=BASE_DIM,
             embed_dim=EMBED_DIM,
             num_classes=NUM_CLASSES,
-            onehot_input=True
+            onehot_label=True
         )
         crit = ConditionalDiscriminator(
             image_dim=IMAGE_DIM,
             base_dim=BASE_DIM,
             embed_dim=EMBED_DIM,
             num_classes=NUM_CLASSES,
-            onehot_input=True,
+            onehot_label=True,
             return_logits=False,
         )
         
@@ -568,7 +568,7 @@ if __name__ == '__main__':
             latent_dim=LATENT_DIM,
             image_dim=IMAGE_DIM,
             base_dim=BASE_DIM,
-            onehot_input=True
+            onehot_label=True
         )
         gen.build()
 
@@ -576,7 +576,7 @@ if __name__ == '__main__':
             image_dim=IMAGE_DIM,
             base_dim=BASE_DIM,
             num_classes=NUM_CLASSES,
-            onehot_input=True
+            onehot_label=True
         )
         disc.build()
         disc.compile(metrics=['accuracy'])
@@ -640,7 +640,7 @@ if __name__ == '__main__':
             image_dim=IMAGE_DIM,
             embed_dim=EMBED_DIM,
             num_classes=NUM_CLASSES,
-            onehot_input=True,
+            onehot_label=True,
             dafl_batchnorm=True
         )
         gen.build()
@@ -649,7 +649,7 @@ if __name__ == '__main__':
             input_dim=IMAGE_DIM,
             embed_dim=EMBED_DIM,
             num_classes=NUM_CLASSES,
-            onehot_input=True,
+            onehot_label=True,
         )
         disc.build()
 
@@ -714,7 +714,7 @@ if __name__ == '__main__':
             image_dim=IMAGE_DIM,
             embed_dim=EMBED_DIM,
             num_classes=NUM_CLASSES,
-            onehot_input=True,
+            onehot_label=True,
             dafl_batchnorm=True
         )
         gen.build()
@@ -724,7 +724,7 @@ if __name__ == '__main__':
             input_dim=IMAGE_DIM,
             embed_dim=EMBED_DIM,
             num_classes=NUM_CLASSES,
-            onehot_input=True,
+            onehot_label=True,
         )
         disc.build()
 
