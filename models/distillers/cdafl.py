@@ -166,7 +166,8 @@ class ConditionalDataFreeDistiller(DataFreeDistiller):
         # Config conditional loss
         if self.conditional_loss_fn is True:
             if self.onehot_label is True:
-                self._conditional_loss_fn = lambda pred, target: torch.nn.functional.cross_entropy(input=pred, target=target.argmax(dim=1))
+                # self._conditional_loss_fn = torch.nn.KLDivLoss(reduction='batchmean', log_target=False)
+                self._conditional_loss_fn = torch.nn.CrossEntropyLoss()
             elif self.onehot_label is False:
                 self._conditional_loss_fn = torch.nn.CrossEntropyLoss()
         elif self.conditional_loss_fn is False:
@@ -245,6 +246,10 @@ class ConditionalDataFreeDistiller(DataFreeDistiller):
                 self.train_metrics['loss_ac'].update(new_entry=loss_activation)
             if self.info_entropy_loss_fn is not False:
                 self.train_metrics['loss_ie'].update(new_entry=loss_info_entropy)
+            if self.conditional_loss_fn is not False:
+                self.train_metrics['loss_cn'].update(new_entry=loss_conditional)
+            if self.distribution_loss_fn is not False:
+                self.train_metrics['loss_ds'].update(new_entry=loss_distribution)
             self.train_metrics['loss_gen'].update(new_entry=loss_generator)
             self.train_metrics['loss_dt'].update(new_entry=loss_distill)
 
@@ -343,7 +348,7 @@ if __name__ == '__main__':
             distribution_loss_fn=True,
             distribution_layer=teacher.conv_1[-1],
             distill_loss_fn=torch.nn.KLDivLoss(reduction='batchmean'),
-            student_loss_fn=torch.nn.CrossEntropyLoss()
+            student_loss_fn=torch.nn.CrossEntropyLoss(),
         )
 
         csv_logger = CSVLogger(
