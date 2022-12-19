@@ -166,8 +166,8 @@ class ConditionalDataFreeDistiller(DataFreeDistiller):
         # Config conditional loss
         if self.conditional_loss_fn is True:
             if self.onehot_label is True:
-                # self._conditional_loss_fn = torch.nn.KLDivLoss(reduction='batchmean', log_target=False)
-                self._conditional_loss_fn = torch.nn.CrossEntropyLoss()
+                self._conditional_loss_fn = torch.nn.KLDivLoss(reduction='batchmean')
+                # self._conditional_loss_fn = torch.nn.CrossEntropyLoss()
             elif self.onehot_label is False:
                 self._conditional_loss_fn = torch.nn.CrossEntropyLoss()
         elif self.conditional_loss_fn is False:
@@ -287,6 +287,13 @@ if __name__ == '__main__':
         NUM_CLASSES = 10
         BATCH_SIZE = 128
         NUM_EPOCHS_DISTILL = 200
+        OPT_GEN, KWARGS_OPT_GEN = torch.optim.Adam, {'lr': 2e-1}
+        OPT_STU, KWARGS_OPT_STU = torch.optim.Adam, {'lr': 2e-3}
+        ONEHOT_LOSS_FN,       COEFF_OH = True, 1
+        ACTIVATION_LOSS_FN,   COEFF_AC = True, 0.1
+        INFO_ENTROPY_LOSS_FN, COEFF_IE = True, 5
+        CONDITIONAL_LOSS_FN,  COEFF_CN = True, 1
+        DISTRIBUTION_LOSS_FN, COEFF_DS = True, 1
 
         dataloader = get_dataloader(
             dataset='MNIST',
@@ -339,16 +346,22 @@ if __name__ == '__main__':
             generator=generator,
         )
         distiller.compile(
-            optimizer_student=torch.optim.Adam(student.parameters(), lr=2e-3),
-            optimizer_generator=torch.optim.Adam(generator.parameters(), lr=2e-1),
-            onehot_loss_fn=True,
-            activation_loss_fn=True,
-            info_entropy_loss_fn=True,
-            conditional_loss_fn=True,
-            distribution_loss_fn=True,
+            optimizer_student=OPT_STU(student.parameters(), **KWARGS_OPT_STU),
+            optimizer_generator=OPT_GEN(generator.parameters(), **KWARGS_OPT_GEN),
+            onehot_loss_fn=ONEHOT_LOSS_FN,
+            activation_loss_fn=ACTIVATION_LOSS_FN,
+            info_entropy_loss_fn=INFO_ENTROPY_LOSS_FN,
+            conditional_loss_fn=CONDITIONAL_LOSS_FN,
+            distribution_loss_fn=DISTRIBUTION_LOSS_FN,
             distribution_layer=teacher.conv_1[-1],
             distill_loss_fn=torch.nn.KLDivLoss(reduction='batchmean'),
             student_loss_fn=torch.nn.CrossEntropyLoss(),
+            coeff_oh=COEFF_OH,
+            coeff_ac=COEFF_AC,
+            coeff_ie=COEFF_IE,
+            coeff_cn=COEFF_CN,
+            coeff_ds=COEFF_DS,
+
         )
 
         csv_logger = CSVLogger(
