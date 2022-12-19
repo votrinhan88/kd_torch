@@ -1,5 +1,5 @@
 from collections import OrderedDict
-from typing import Tuple, Union
+from typing import Tuple, Optional, Union
 
 import torch
 
@@ -23,31 +23,54 @@ class IntermediateFeatureExtractor(torch.nn.Module):
     def __init__(
         self,
         model:torch.nn.Module,
-        out_layers:dict[str, torch.nn.Module],
+        in_layers:Optional[dict[str, torch.nn.Module]],
+        out_layers:Optional[dict[str, torch.nn.Module]],
         with_output=True,
     ):  
         super().__init__()
         self.model = model
+        self.in_layers = in_layers
         self.out_layers = out_layers
         self.with_output = with_output
         
-        self.features = OrderedDict({k: None for k in self.out_layers.keys()})
-        self.handles = OrderedDict({k: None for k in self.out_layers.keys()})
+        self.features = {
+            'in': OrderedDict({k: None for k in self.in_layers.keys()}),
+            'out': OrderedDict({k: None for k in self.out_layers.keys()}),
+        }
+        self.handles = {
+            'in': OrderedDict({k: None for k in self.in_layers.keys()}),
+            'out': OrderedDict({k: None for k in self.out_layers.keys()}),
+        }
+
+        for key, layer in self.in_layers.items():
+            def hook(module, input, key=key):
+                if self.features['in'][key] is None:
+                    self.features['in'][key] = input
+                else:
+                    if isinstance(self.features['in'][key], list):
+                        self.features['in'][key].append(input)
+                    else:
+                        self.features['in'][key] = [self.features['in'][key], input]
+            h = layer.register_forward_pre_hook(hook)
+            self.handles['in'][key] = h
 
         for key, layer in self.out_layers.items():
             def hook(module, input, output, key=key):
-                if self.features[key] is None:
-                    self.features[key] = output
+                if self.features['out'][key] is None:
+                    self.features['out'][key] = output
                 else:
-                    if isinstance(self.features[key], list):
-                        self.features[key].append(output)
+                    if isinstance(self.features['out'][key], list):
+                        self.features['out'][key].append(output)
                     else:
-                        self.features[key] = [self.features[key], output]
+                        self.features['out'][key] = [self.features['out'][key], output]
             h = layer.register_forward_hook(hook)
-            self.handles[key] = h
+            self.handles['out'][key] = h
 
-    def __call__(self, *args, **kwargs) -> Union[Tuple[dict, torch.Tensor], torch.Tensor]:
-        self.features = OrderedDict({k: None for k in self.out_layers.keys()})
+    def __call__(self, *args, **kwargs) -> Union[Tuple[dict[str, dict[str, torch.Tensor]], torch.Tensor], torch.Tensor]:
+        self.features = {
+            'in': OrderedDict({k: None for k in self.in_layers.keys()}),
+            'out': OrderedDict({k: None for k in self.out_layers.keys()}),
+        }
         output = self.model(*args, **kwargs)
         
         if self.with_output:
@@ -56,7 +79,9 @@ class IntermediateFeatureExtractor(torch.nn.Module):
             return self.features
     
     def remove_hooks(self):
-        for h in self.handles.values():
+        for h in self.handles['in'].values():
+            h.remove()
+        for h in self.handles['out'].values():
             h.remove()
         self.handles.clear()
 
