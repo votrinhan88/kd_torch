@@ -270,6 +270,8 @@ class ConditionalDataFreeDistiller(DataFreeDistiller):
 
 if __name__ == '__main__':
     from models.classifiers import AlexNet, ClassifierTrainer
+    from models.GANs.utils import MakeConditionalSyntheticGIFCallback
+    from utils.callbacks import CSVLogger
     from utils.dataloader import get_dataloader
     from utils.metrics import CategoricalAccuracy
 
@@ -279,7 +281,7 @@ if __name__ == '__main__':
         EMBED_DIM = None
         NUM_CLASSES = 10
         BATCH_SIZE = 128
-        NUM_EPOCHS = 200
+        NUM_EPOCHS_DISTILL = 200
 
         dataloader = get_dataloader(
             dataset='MNIST',
@@ -343,9 +345,22 @@ if __name__ == '__main__':
             distill_loss_fn=torch.nn.KLDivLoss(reduction='batchmean'),
             student_loss_fn=torch.nn.CrossEntropyLoss()
         )
+
+        csv_logger = CSVLogger(
+            filename=f'./logs/{distiller.__class__.__name__}_{student.__class__.__name__}_mnist.csv',
+            append=True
+        )
+        gif_maker = MakeConditionalSyntheticGIFCallback(
+            filename=f'./logs/{distiller.__class__.__name__}_{student.__class__.__name__}_mnist.gif',
+            nrows=5, ncols=5,
+            postprocess_fn=lambda x:x*0.3081 + 0.1307,
+            normalize=False,
+            save_freq=NUM_EPOCHS_DISTILL//50
+        )
         distiller.training_loop(
-            num_epochs=NUM_EPOCHS,
-            valloader=dataloader['val']
+            num_epochs=NUM_EPOCHS_DISTILL,
+            valloader=dataloader['val'],
+            callbacks=[csv_logger, gif_maker]
         )
 
     expt_mnist()
