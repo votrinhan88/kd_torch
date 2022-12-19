@@ -5,11 +5,11 @@ assert os.path.basename(repo_path) == 'kd_torch', "Wrong parent folder. Please c
 if sys.path[0] != repo_path:
     sys.path.insert(0, repo_path)
 
-from typing import Any, Callable, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Optional, Sequence, Union
 
 import torch
 
-from utils.metrics import Mean, CategoricalAccuracy
+from utils.metrics import Mean, SparseCategoricalAccuracy
 from utils.trainers import Trainer
 
 class Distiller(Trainer):
@@ -28,10 +28,12 @@ class Distiller(Trainer):
     Distilling the Knowledge in a Neural Network - Hinton et al. (2015)
     DOI: 10.48550/arXiv.1503.02531
     '''
-    def __init__(self,
-                 teacher:torch.nn.Module,
-                 student:torch.nn.Module,
-                 image_dim:Optional[Sequence[int]]=None):
+    def __init__(
+        self,
+        teacher:torch.nn.Module,
+        student:torch.nn.Module,
+        image_dim:Optional[Sequence[int]]=None,
+    ):
         """Initialize distiller.
         
         Args:
@@ -47,11 +49,9 @@ class Distiller(Trainer):
         self.teacher = teacher.to(self.device)
         self.student = student.to(self.device)
         self.image_dim = image_dim
-        
+
         if self.image_dim is None:
             self.image_dim:int = self.student.input_dim
-        elif self.image_dim is not None:
-            self.image_dim = image_dim
 
     def compile(
         self,
@@ -106,12 +106,12 @@ class Distiller(Trainer):
             self.train_metrics.update({'loss_st': Mean()})
         self.train_metrics.update({
             'loss': Mean(),
-            'acc': CategoricalAccuracy(),
+            'acc': SparseCategoricalAccuracy(),
         })
 
         self.val_metrics = {
             'loss': Mean(),
-            'acc': CategoricalAccuracy(),
+            'acc': SparseCategoricalAccuracy(),
         }
 
     def train_batch(self, data):

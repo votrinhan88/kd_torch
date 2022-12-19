@@ -12,7 +12,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-from utils.metrics import Mean, CategoricalAccuracy
+from utils.metrics import Mean, SparseCategoricalAccuracy
 from utils.trainers import Trainer
 from utils.callbacks import Callback
 from utils.modules import Reshape
@@ -62,23 +62,20 @@ class DataFreeDistiller(Trainer):
         student:torch.nn.Module,
         generator:torch.nn.Module,
         latent_dim:Optional[int]=None,
-        image_dim:Optional[Sequence[int]]=None
+        image_dim:Optional[Sequence[int]]=None,
     ):
         super().__init__()
         self.teacher = teacher.to(self.device)
         self.student = student.to(self.device)
         self.generator = generator.to(self.device)
+        self.latent_dim = latent_dim
         self.image_dim = image_dim
 
-        if latent_dim is None:
+        if self.latent_dim is None:
             self.latent_dim:int = self.generator.latent_dim
-        elif latent_dim is not None:
-            self.latent_dim = latent_dim
         
         if self.image_dim is None:
             self.image_dim:int = self.student.input_dim
-        elif self.image_dim is not None:
-            self.image_dim = image_dim
 
     def compile(
         self,
@@ -161,7 +158,7 @@ class DataFreeDistiller(Trainer):
 
         self.val_metrics = {
             'loss': Mean(),
-            'acc': CategoricalAccuracy(),
+            'acc': SparseCategoricalAccuracy(),
         }
 
     def train_batch(self, data:Any):
@@ -179,7 +176,7 @@ class DataFreeDistiller(Trainer):
         pseudo_label = torch.argmax(input=logits_teacher.clone().detach(), dim=1)
         
         loss_onehot = self._onehot_loss_fn(logits_teacher, pseudo_label)
-        loss_activation = self._activation_loss_fn(features_teacher.get('flatten'))
+        loss_activation = self._activation_loss_fn(features_teacher['out'].get('flatten'))
         loss_info_entropy = self._info_entropy_loss_fn(logits_teacher)
         loss_generator = (
             self.coeff_oh*loss_onehot

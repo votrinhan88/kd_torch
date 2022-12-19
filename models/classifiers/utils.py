@@ -9,25 +9,34 @@ from typing import Any, Callable, Optional, Tuple
 import torch
 
 from utils.trainers import Trainer
-from utils.metrics import Mean, CategoricalAccuracy
+from utils.metrics import Mean, SparseCategoricalAccuracy
 
 class ClassifierTrainer(Trainer):
     def __init__(self,
-                 model:torch.nn.Module,
-                 device:Optional[str]=None):
+        model:torch.nn.Module,
+        device:Optional[str]=None,
+    ):
         super().__init__(device=device)
         self.model = model.to(self.device)
 
-    def compile(self,
-                optimizer:torch.optim.Optimizer,
-                loss_fn:Callable[[Any], torch.Tensor]):
+    def compile(
+        self,
+        optimizer:torch.optim.Optimizer,
+        loss_fn:Callable[[Any], torch.Tensor],
+    ):
         super().compile()
         self.optimizer = optimizer
         self.loss_fn = loss_fn
 
         # Metrics
-        self.train_metrics = {'loss': Mean(), 'acc': CategoricalAccuracy()}
-        self.val_metrics = {'loss': Mean(), 'acc': CategoricalAccuracy()}
+        self.train_metrics = {
+            'loss': Mean(),
+            'acc': SparseCategoricalAccuracy(),
+        }
+        self.val_metrics = {
+            'loss': Mean(),
+            'acc': SparseCategoricalAccuracy(),
+        }
 
     def train_batch(self, data:Tuple[torch.Tensor, torch.Tensor]):
         # Unpack data
