@@ -166,7 +166,7 @@ class ConditionalDataFreeDistiller(DataFreeDistiller):
         # Config conditional loss
         if self.conditional_loss_fn is True:
             if self.onehot_label is True:
-                self._conditional_loss_fn = lambda pred, target: torch.nn.CrossEntropyLoss()(pred, torch.argmax(target, dim=1))
+                self._conditional_loss_fn = lambda pred, target: torch.nn.functional.cross_entropy(input=pred, target=torch.argmax(target, dim=1))
             elif self.onehot_label is False:
                 self._conditional_loss_fn = torch.nn.CrossEntropyLoss()
         elif self.conditional_loss_fn is False:
@@ -184,6 +184,9 @@ class ConditionalDataFreeDistiller(DataFreeDistiller):
         else:
             self._distribution_loss_fn = self.distribution_loss_fn
 
+        # Reconfigure metrics
+        if self.onehot_label is True:
+            self.val_metrics.update({'acc': CategoricalAccuracy()})
         # Additional metrics
         if self.conditional_loss_fn is not False:
             self.train_metrics.update({'loss_cn': Mean()})
