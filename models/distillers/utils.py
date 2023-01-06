@@ -23,15 +23,20 @@ class IntermediateFeatureExtractor(torch.nn.Module):
     def __init__(
         self,
         model:torch.nn.Module,
-        in_layers:Optional[dict[str, torch.nn.Module]],
-        out_layers:Optional[dict[str, torch.nn.Module]],
-        with_output=True,
+        in_layers:Optional[dict[str, torch.nn.Module]]=None,
+        out_layers:Optional[dict[str, torch.nn.Module]]=None,
+        with_output:bool=True,
     ):  
         super().__init__()
         self.model = model
         self.in_layers = in_layers
         self.out_layers = out_layers
         self.with_output = with_output
+
+        if self.in_layers is None:
+            self.in_layers = {}
+        if self.out_layers is None:
+            self.out_layers = {}
         
         self.features = {
             'in': OrderedDict({k: None for k in self.in_layers.keys()}),
