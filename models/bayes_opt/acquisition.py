@@ -11,36 +11,35 @@ from models.bayes_opt.gaussian_process import GaussianProcess
 
 class AcquisitionFunction(torch.nn.Module):
     """Base class for acquisition functions."""
-    def __init__(self, gp:GaussianProcess):
+    def __init__(self):
         super().__init__()
-        self.gp = gp
 
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}()'
 
-    def forward(self) -> torch.Tensor:
+    def forward(self, gp:GaussianProcess) -> torch.Tensor:
         pass
 
 class UpperConfidenceBound(AcquisitionFunction):
-    def __init__(self, gp:GaussianProcess, beta:float=0.1):
-        super().__init__(gp=gp)
+    def __init__(self, beta:float=0.1):
+        super().__init__()
         self.beta = beta
 
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}(beta={self.beta})'
 
-    def forward(self) -> torch.Tensor:
-        mean = self.gp.mean_posterior.squeeze(dim=1)
-        std = self.gp.covar_posterior.diag().sqrt()
+    def forward(self, gp:GaussianProcess) -> torch.Tensor:
+        mean = gp.mean_posterior.squeeze(dim=1)
+        std = gp.covar_posterior.diag().sqrt()
         return mean + self.beta*std
 
 class ExpectedImprovement(AcquisitionFunction):
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}()'
 
-    def forward(self) -> torch.Tensor:
-        mean = self.gp.mean_posterior.squeeze(dim=1)
-        std = self.gp.covar_posterior.diag().sqrt()
+    def forward(self, gp:GaussianProcess) -> torch.Tensor:
+        mean = gp.mean_posterior.squeeze(dim=1)
+        std = gp.covar_posterior.diag().sqrt()
         best = mean.max()
 
         z = (mean - best) / std
@@ -52,9 +51,9 @@ class ProbabilityOfImprovement(AcquisitionFunction):
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}()'
 
-    def forward(self) -> torch.Tensor:
-        mean = self.gp.mean_posterior.squeeze(dim=1)
-        std = self.gp.covar_posterior.diag().sqrt()
+    def forward(self, gp:GaussianProcess) -> torch.Tensor:
+        mean = gp.mean_posterior.squeeze(dim=1)
+        std = gp.covar_posterior.diag().sqrt()
         best = mean.max()
 
         z = (mean - best) / std
@@ -110,14 +109,14 @@ if __name__ == '__main__':
         )
         gp.forward(x_sample)
 
-        ucb = UpperConfidenceBound(gp=gp, beta=2)
-        ei = ExpectedImprovement(gp=gp)
-        poi = ProbabilityOfImprovement(gp=gp)
+        ucb = UpperConfidenceBound(beta=2)
+        ei = ExpectedImprovement()
+        poi = ProbabilityOfImprovement()
 
         # Visualize Prior and Posterior
         def plot_helper(
             x, mean, std,
-            acq_fns:Sequence[AcquisitionFunction],
+            acq_fns:Sequence[AcquisitionFunction], gp:GaussianProcess,
             x_train=None, y_train=None,
         ):
             num_acq = len(acq_fns)
@@ -128,7 +127,7 @@ if __name__ == '__main__':
             ax[0, 0].fill_between(x, mean - 2*std, mean + 2*std, color='red', alpha=0.5, label="$\pm$ 2 STD")
             # Acquisition functions
             for i, a in enumerate(acq_fns):
-                ax[i+1, 0].plot(x, a(), label=a)
+                ax[i+1, 0].plot(x, a(gp), label=a)
                 ax[i+1, 0].set(title=f'{a}')
 
             ax[0, 0].scatter(x_train, y_train, color='black')
@@ -140,7 +139,7 @@ if __name__ == '__main__':
         mean = gp.mean_posterior
         std = gp.covar_posterior.diag().sqrt()
         plot_helper(
-            x=x_sample.squeeze(), mean=mean.squeeze(), std=std.squeeze(), acq_fns=[ucb, ei, poi],
+            x=x_sample.squeeze(), mean=mean.squeeze(), std=std.squeeze(), acq_fns=[ucb, ei, poi], gp=gp,
             x_train=gp.x_train.squeeze(), y_train=gp.y_train.squeeze()
         )
 
