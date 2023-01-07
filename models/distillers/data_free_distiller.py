@@ -252,7 +252,7 @@ class DataFreeDistiller(Trainer):
         return loss
 
 if __name__ == '__main__':
-    from utils.dataloader import get_dataloader
+    from utils.data.dataloader import get_dataloader
     from models.classifiers import LeNet5, ClassifierTrainer
     from utils.callbacks import CSVLogger, ModelCheckpoint
     from models.GANs.utils import MakeSyntheticGIFCallback
