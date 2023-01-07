@@ -1,4 +1,4 @@
-from typing import Callable, Literal
+from typing import Callable, Literal, Tuple
 
 import torch
 import matplotlib.pyplot as plt
@@ -17,6 +17,31 @@ class GaussianProcess(torch.nn.Module):
         self.covar_prior:torch.Tensor = None
         self.mean_posterior:torch.Tensor = None
         self.covar_posterior:torch.Tensor = None
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}()"
+
+    def forward(self, x:torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        pass
+
+    def realize_prior(self, num_realize:int=1) -> torch.Tensor:
+        pass
+
+    def realize_posterior(self, num_realize:int=1) -> torch.Tensor:
+        pass
+
+    def update(self, x_train:torch.Tensor, y_train:torch.Tensor):
+        """Update the Gaussian process with new data. 
+        
+        Args:
+            `x_train`: Additional observed inputs of shape B x D.
+            `y_train`: Additional observed labels of shape B x 1.
+        
+        B: batch size
+        D: dimension of sample (number of features)
+        """        
+        self.x_train = torch.cat([self.x_train, x_train], dim=0)
+        self.y_train = torch.cat([self.y_train, y_train], dim=0)
 
 class FixedNoiseGaussianProcess(GaussianProcess):
     """Gaussian process.
@@ -42,9 +67,8 @@ class FixedNoiseGaussianProcess(GaussianProcess):
         )
         self.kernel = kernel
         self.noise = noise
-        self.fit()
         
-    def __repr__(self):
+    def __repr__(self) -> str:
         return (
             f"{self.__class__.__name__}(\n"
             f"    x_train:{tuple(self.x_train.shape)},\n"
@@ -53,24 +77,21 @@ class FixedNoiseGaussianProcess(GaussianProcess):
             f"    noise={self.noise}\n"
             f")"
         )
-    
-    def fit(self):
-        # Normalize to mean = 0
+            
+    def forward(self, x:torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        # Translate labels to have mean = 0 for simplicity
         self.mean_y_train = self.y_train.mean()
         self.norm_y_train = self.y_train - self.mean_y_train
-
-        num_observed = self.x_train.shape[0]
-        self.covar_observed = (
-            self.kernel(self.x_train, self.x_train)
-            + (self.noise + self.EPSILON)*torch.eye(num_observed)
-        )
-        
-    def forward(self, x:torch.Tensor):
-        # Assuming a mean of 0 for simplicity
         self.mean_prior = torch.zeros(size=[x.shape[0], 1])
         self.covar_prior = self.kernel(x, x)
 
-        covar_11_inv = self.covar_observed.inverse()
+        num_observed = self.x_train.shape[0]
+        covar_observed = (
+            self.kernel(self.x_train, self.x_train)
+            + (self.noise + self.EPSILON)*torch.eye(num_observed)
+        )
+
+        covar_11_inv = covar_observed.inverse()
         covar_22 = self.covar_prior
         covar_21 = self.kernel(x, self.x_train) # == covar_12.T
 
@@ -79,7 +100,7 @@ class FixedNoiseGaussianProcess(GaussianProcess):
         self.covar_posterior = covar_22 - covar_21 @ covar_11_inv @ covar_21.T
         return self.mean_posterior, self.covar_posterior
 
-    def realize_prior(self, num_realize:int=1):
+    def realize_prior(self, num_realize:int=1) -> torch.Tensor:
         """Draw samples from the prior.
         
         Args:
@@ -90,9 +111,9 @@ class FixedNoiseGaussianProcess(GaussianProcess):
             cov=self.covar_prior,
             size=num_realize
         )
-        return y
+        return torch.tensor(y)
 
-    def realize_posterior(self, num_realize:int=1):
+    def realize_posterior(self, num_realize:int=1) -> torch.Tensor:
         """Draw samples from the posterior.
         
         Args:
@@ -103,21 +124,7 @@ class FixedNoiseGaussianProcess(GaussianProcess):
             cov=self.covar_posterior,
             size=num_realize
         )
-        return y
-
-    def update(self, x_train:torch.Tensor, y_train:torch.Tensor):
-        """Update the Gaussian process with new data. 
-        
-        Args:
-            `x_train`: Additional observed inputs of shape B x D.
-            `y_train`: Additional observed labels of shape B x 1.
-        
-        B: batch size
-        D: dimension of sample (number of features)
-        """        
-        self.x_train = torch.cat([self.x_train, x_train], dim=0)
-        self.y_train = torch.cat([self.y_train, y_train], dim=0)
-        self.fit()
+        return torch.tensor(y)
         
 if __name__ == '__main__':
     # Change path
