@@ -15,24 +15,30 @@ class AcquisitionFunction(torch.nn.Module):
         super().__init__()
         self.gp = gp
 
+    def __repr__(self) -> str:
+        return f'{self.__class__.__name__}()'
+
+    def forward(self) -> torch.Tensor:
+        pass
+
 class UpperConfidenceBound(AcquisitionFunction):
     def __init__(self, gp:GaussianProcess, beta:float=0.1):
         super().__init__(gp=gp)
         self.beta = beta
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f'{self.__class__.__name__}(beta={self.beta})'
 
-    def forward(self):
+    def forward(self) -> torch.Tensor:
         mean = self.gp.mean_posterior.squeeze(dim=1)
         std = self.gp.covar_posterior.diag().sqrt()
         return mean + self.beta*std
 
 class ExpectedImprovement(AcquisitionFunction):
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f'{self.__class__.__name__}()'
 
-    def forward(self):
+    def forward(self) -> torch.Tensor:
         mean = self.gp.mean_posterior.squeeze(dim=1)
         std = self.gp.covar_posterior.diag().sqrt()
         best = mean.max()
@@ -43,10 +49,10 @@ class ExpectedImprovement(AcquisitionFunction):
         return ei
 
 class ProbabilityOfImprovement(AcquisitionFunction):
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f'{self.__class__.__name__}()'
 
-    def forward(self):
+    def forward(self) -> torch.Tensor:
         mean = self.gp.mean_posterior.squeeze(dim=1)
         std = self.gp.covar_posterior.diag().sqrt()
         best = mean.max()
