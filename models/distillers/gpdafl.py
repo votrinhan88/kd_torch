@@ -5,9 +5,10 @@ assert os.path.basename(repo_path) == 'kd_torch', "Wrong parent folder. Please c
 if sys.path[0] != repo_path:
     sys.path.insert(0, repo_path)
 
-from typing import Any, Callable, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Optional, Sequence, Union
 
 import torch
+from torch.utils.data import DataLoader
 
 from models.bayes_opt.acquisition import AcquisitionFunction
 from models.bayes_opt.gaussian_process import GaussianProcess, FixedNoiseGaussianProcess
@@ -69,7 +70,7 @@ class GPDAFL(DataFreeDistiller):
 
         # Config acquisition loss
         if self.acquisition_loss_fn is True:
-            self._acquisition_loss_fn = MeanVarianceLoss(gp=self.gp)
+            self._acquisition_loss_fn = MeanVarianceLoss()
         elif self.acquisition_loss_fn is False:
             self._acquisition_loss_fn = lambda *args, **kwargs:0
         else:
@@ -91,8 +92,8 @@ class GPDAFL(DataFreeDistiller):
         self.student.eval()
         self.optimizer_generator.zero_grad()
 
-        self.gp(features_teacher['out']['F6'])
-        loss_acquisition:torch.Tensor = self._acquisition_loss_fn()
+        self.gp(features_teacher['out']['gp_label'])
+        loss_acquisition:torch.Tensor = self._acquisition_loss_fn(gp=self.gp)
         loss_info_entropy = self._info_entropy_loss_fn(logits_teacher)
         loss_generator = (
             + self.coeff_ie*loss_info_entropy
@@ -113,16 +114,12 @@ class GPDAFL(DataFreeDistiller):
         confidence:torch.Tensor = logits_teacher.clone().detach().softmax(dim=1).max(dim=1, keepdim=True)[0]
         best_variation = loss_acquisition.clone().detach().argmin()
         self.gp.update(
-            x_train=features_teacher['out']['F6'][best_variation].clone().detach().unsqueeze(dim=0),
+            x_train=features_teacher['out']['gp_label'][best_variation].clone().detach().unsqueeze(dim=0),
             y_train=confidence[best_variation].unsqueeze(dim=0),
         )
 
         ## Backward
         loss_generator.backward()
-
-        # # loss_info_entropy.backward()
-        # loss_acquisition.mean().backward()
-
         self.optimizer_generator.step()
         loss_distill.backward()
         self.optimizer_student.step()
@@ -134,19 +131,31 @@ class GPDAFL(DataFreeDistiller):
             if self.acquisition_loss_fn is not False:
                 self.train_metrics['loss_aq'].update(loss_acquisition.mean())
             self.train_metrics['loss_gen'].update(loss_generator)
-            self.train_metrics['loss_dt'].update(loss_distill)
+            self.train_metrics['loss_dt'].update(loss_distill)      
+
+    def head_start_gp(self, trainloader:DataLoader):
+        with torch.inference_mode():
+            for x, _ in trainloader:
+                x = x.to(self.device)
+                features_teacher, logits_teacher = self.teacher(x)
+                confidence = logits_teacher.softmax(dim=1).max(dim=1, keepdim=True)[0]
+
+            self.gp.update(
+                x_train=features_teacher['out']['gp_label'],
+                y_train=confidence,
+            )
 
 class MeanVarianceLoss(AcquisitionFunction):
-    def __init__(self, gp:GaussianProcess, beta:float=0.1):
-        super().__init__(gp=gp)
+    def __init__(self, beta:float=0.1):
+        super().__init__()
         self.beta = beta
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f'{self.__class__.__name__}(beta={self.beta})'
 
-    def forward(self):
-        mean = self.gp.mean_posterior.squeeze(dim=1)
-        var = self.gp.covar_posterior.diag()
+    def forward(self, gp:GaussianProcess) -> torch.Tensor:
+        mean = gp.mean_posterior.squeeze(dim=1)
+        var = gp.covar_posterior.diag()
         return -(mean + self.beta*var)
 
 if __name__ == '__main__':
@@ -169,10 +178,10 @@ if __name__ == '__main__':
         NUM_CLASSES = 10
         BATCH_SIZE_DISTILL = 512
         NUM_EPOCHS_DISTILL = 200
-        COEFF_IE, COEFF_AQ = 1, 1 
+        COEFF_IE, COEFF_AQ = 1, 0.1
 
         GP_NOISE = 1e-3
-        KERNEL, KERNEL_KWARGS = RadialBasisFunctionKernel, {'variance':1, 'length_scale':1}, 
+        KERNEL, KERNEL_KWARGS = RadialBasisFunctionKernel, {'variance':10, 'length_scale':0.5}, 
 
         LEARNING_RATE_TEACHER, LEARNING_RATE_GENERATOR, LEARNING_RATE_STUDENT = 1e-3, 2e-1, 2e-3
 
@@ -207,7 +216,7 @@ if __name__ == '__main__':
 
         teacher = IntermediateFeatureExtractor(
             model=teacher,
-            out_layers={'flatten':teacher.flatten, 'F6':teacher.F6}
+            out_layers={'flatten':teacher.flatten, 'gp_label':teacher.F6}
         )
 
         # Student (LeNet-5-HALF)
@@ -227,20 +236,12 @@ if __name__ == '__main__':
         trainer.evaluate(dataloader['val'])
 
         # Distillation
-        ## Stage 1: Fit the Gaussian process
-        with torch.inference_mode():
-            teacher.eval()
-            x, _ = next(iter(dataloader['train']))
-            features_teacher, logits_teacher = teacher(x)
-            confidence = logits_teacher.softmax(dim=1).max(dim=1, keepdim=True)[0]
         gp = FixedNoiseGaussianProcess(
-            x_train=features_teacher['out']['F6'],
-            y_train=confidence,
+            x_train=torch.empty(0, 84),
+            y_train=torch.empty(0, 1),
             kernel=KERNEL(**KERNEL_KWARGS),
             noise=GP_NOISE,
         )
-
-        ## Stage 2: Distillation
         student = LeNet5(
             half_size=True,
             input_dim=IMAGE_DIM,
@@ -269,7 +270,9 @@ if __name__ == '__main__':
             coeff_ie=COEFF_IE,
             coeff_aq=COEFF_AQ,
         )
-
+        ## Stage 1: Fit the Gaussian process
+        distiller.head_start_gp(trainloader=dataloader['train'])
+        ## Stage 2: Distillation
         csv_logger = CSVLogger(
             filename=f'./logs/{distiller.__class__.__name__}_{student.__class__.__name__}_mnist.csv',
             append=True
