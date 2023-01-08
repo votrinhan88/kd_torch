@@ -11,8 +11,8 @@ class GaussianProcess(torch.nn.Module):
 
     def __init__(self, x_train:torch.Tensor, y_train:torch.Tensor):
         super().__init__()
-        self.x_train = x_train
-        self.y_train = y_train
+        self.register_buffer('x_train', x_train)
+        self.register_buffer('y_train', y_train)
         self.mean_prior:torch.Tensor = None
         self.covar_prior:torch.Tensor = None
         self.mean_posterior:torch.Tensor = None
@@ -88,7 +88,7 @@ class FixedNoiseGaussianProcess(GaussianProcess):
         num_observed = self.x_train.shape[0]
         covar_observed = (
             self.kernel(self.x_train, self.x_train)
-            + (self.noise + self.EPSILON)*torch.eye(num_observed)
+            + (self.noise + self.EPSILON)*torch.eye(num_observed, device=self.x_train.device)
         )
 
         covar_11_inv = covar_observed.inverse()
