@@ -93,11 +93,12 @@ class GPDAFL(DataFreeDistiller):
         self.optimizer_generator.zero_grad()
 
         self.gp(features_teacher['out']['gp_label'])
-        loss_acquisition:torch.Tensor = self._acquisition_loss_fn(gp=self.gp)
+        loss_acquisition_full:torch.Tensor = self._acquisition_loss_fn(gp=self.gp)
+        loss_acquisition = loss_acquisition_full.mean() if self.acquisition_loss_fn is not False else 0
         loss_info_entropy = self._info_entropy_loss_fn(logits_teacher)
         loss_generator = (
             + self.coeff_ie*loss_info_entropy
-            + self.coeff_aq*loss_acquisition.mean()
+            + self.coeff_aq*loss_acquisition
         )
         
         # Phase 2: Training the Student
@@ -110,13 +111,14 @@ class GPDAFL(DataFreeDistiller):
         prob_teacher = logits_teacher.clone().detach().softmax(dim=1)
         loss_distill:torch.Tensor = self.distill_loss_fn(input=log_prob_student, target=prob_teacher)
         
-        # Phase 3: Training the Gaussian process
-        confidence:torch.Tensor = logits_teacher.clone().detach().softmax(dim=1).max(dim=1, keepdim=True)[0]
-        best_variation = loss_acquisition.clone().detach().argmin()
-        self.gp.update(
-            x_train=features_teacher['out']['gp_label'][best_variation].clone().detach().unsqueeze(dim=0),
-            y_train=confidence[best_variation].unsqueeze(dim=0),
-        )
+        # Phase 3: Updating the Gaussian process
+        if self.acquisition_loss_fn is not False:
+            confidence:torch.Tensor = logits_teacher.clone().detach().softmax(dim=1).max(dim=1, keepdim=True)[0]
+            best_variation = loss_acquisition.clone().detach().argmin()
+            self.gp.update(
+                x_train=features_teacher['out']['gp_label'][best_variation].clone().detach().unsqueeze(dim=0),
+                y_train=confidence[best_variation].unsqueeze(dim=0),
+            )
 
         ## Backward
         loss_generator.backward()
@@ -129,7 +131,7 @@ class GPDAFL(DataFreeDistiller):
             if self.info_entropy_loss_fn is not False:
                 self.train_metrics['loss_ie'].update(loss_info_entropy)
             if self.acquisition_loss_fn is not False:
-                self.train_metrics['loss_aq'].update(loss_acquisition.mean())
+                self.train_metrics['loss_aq'].update(loss_acquisition)
             self.train_metrics['loss_gen'].update(loss_generator)
             self.train_metrics['loss_dt'].update(loss_distill)      
 
@@ -177,8 +179,10 @@ if __name__ == '__main__':
         IMAGE_DIM = [1, 32, 32] # LeNet-5 accepts [32, 32] images
         NUM_CLASSES = 10
         BATCH_SIZE_DISTILL = 512
-        NUM_EPOCHS_DISTILL = 200
-        COEFF_IE, COEFF_AQ = 1, 0.1
+        NUM_EPOCHS_DISTILL = 50
+        INFO_ENTROPY_LOSS_FN, COEFF_IE = True, 1
+        ACQUISITION_LOSS_FN,  COEFF_AQ = False, 0.1
+        GP_LABEL = 'F6'
 
         GP_NOISE = 1e-3
         KERNEL, KERNEL_KWARGS = RadialBasisFunctionKernel, {'variance':10, 'length_scale':0.5}, 
@@ -216,7 +220,10 @@ if __name__ == '__main__':
 
         teacher = IntermediateFeatureExtractor(
             model=teacher,
-            out_layers={'flatten':teacher.flatten, 'gp_label':teacher.F6}
+            out_layers={
+                'flatten':teacher.flatten,
+                'gp_label':getattr(teacher, GP_LABEL)
+            }
         )
 
         # Student (LeNet-5-HALF)
@@ -261,8 +268,8 @@ if __name__ == '__main__':
         distiller.compile(
             optimizer_student=torch.optim.Adam(params=student.parameters(), lr=LEARNING_RATE_STUDENT),
             optimizer_generator=torch.optim.Adam(params=generator.parameters(), lr=LEARNING_RATE_GENERATOR),
-            info_entropy_loss_fn=True,
-            acquisition_loss_fn=True,
+            info_entropy_loss_fn=INFO_ENTROPY_LOSS_FN,
+            acquisition_loss_fn=ACQUISITION_LOSS_FN,
             distill_loss_fn=torch.nn.KLDivLoss(reduction='batchmean', log_target=True),
             student_loss_fn=torch.nn.CrossEntropyLoss(),
             batch_size=BATCH_SIZE_DISTILL,
